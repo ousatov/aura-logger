@@ -3,6 +3,7 @@ package com.usatov.aura.logger.demo.config
 import androidx.lifecycle.viewModelScope
 import com.usatov.aura.logger.core.EventTracker
 import com.usatov.aura.logger.core.EventTrackerConfig
+import com.usatov.aura.logger.core.UnseenEventsProtection
 import com.usatov.aura.logger.demo.catalog.AppEvents
 import com.usatov.aura.logger.demo.config.ConfigContract.Effect
 import com.usatov.aura.logger.demo.config.ConfigContract.InputError
@@ -14,6 +15,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -28,7 +31,22 @@ class ConfigViewModel @Inject constructor(
     private val appEvents: AppEvents,
 ) : MviViewModel<State, Intent, Effect>(State()) {
 
+    private val saveMutex = Mutex()
+
+    /** The stored "track navigation" flag; `null` until loaded. */
+    private var persistedTrackNavigation: Boolean? = null
+
     init {
+        viewModelScope.launch {
+            var first = true
+            repository.trackNavigation.collect { enabled ->
+                persistedTrackNavigation = enabled
+                if (first) {
+                    first = false
+                    setState { copy(trackNavigation = enabled) }
+                }
+            }
+        }
         viewModelScope.launch {
             var first = true
             repository.config.collect { config ->
@@ -41,6 +59,7 @@ class ConfigViewModel @Inject constructor(
                             retentionError = null,
                             maxEventsError = null,
                             savedConfig = config,
+                            clearDeletesUnseen = !config.unseenEventsProtection.onClearAll,
                         )
                     }
                 } else {
@@ -65,6 +84,10 @@ class ConfigViewModel @Inject constructor(
                 )
             }
             Intent.Save -> save()
+            is Intent.TrackNavigationChanged -> setState { copy(trackNavigation = intent.enabled) }
+            is Intent.ClearDeletesUnseenChanged -> setState { copy(clearDeletesUnseen = intent.enabled) }
+            Intent.ScreenHidden -> persistSwitches()
+
         }
     }
 
@@ -76,7 +99,11 @@ class ConfigViewModel @Inject constructor(
         setState { copy(isSaving = true) }
         val previous = snapshot.savedConfig
         viewModelScope.launch {
-            val config = EventTrackerConfig(retentionDays = retention, maxEvents = maxEvents)
+            val config = EventTrackerConfig(
+                retentionDays = retention,
+                maxEvents = maxEvents,
+                unseenEventsProtection = previous?.unseenEventsProtection ?: UnseenEventsProtection(),
+            )
             try {
                 repository.save(config)
                 try {
@@ -101,6 +128,47 @@ class ConfigViewModel @Inject constructor(
             } catch (_: Exception) {
                 setState { copy(isSaving = false) }
                 sendEffect(Effect.SaveFailed)
+            }
+        }
+    }
+
+    private fun persistSwitches() {
+        viewModelScope.launch {
+            // Serialised and re-checked inside the lock: a tab switch followed by a lifecycle stop
+            // must not save the same change twice.
+            saveMutex.withLock {
+                val state = currentState
+                val saved = state.savedConfig ?: return@withLock
+                try {
+                    val storedNavigation = persistedTrackNavigation
+                    if (storedNavigation != null && state.trackNavigation != storedNavigation) {
+                        repository.saveTrackNavigation(state.trackNavigation)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    setState { copy(trackNavigation = persistedTrackNavigation ?: trackNavigation) }
+                    sendEffect(Effect.SaveFailed)
+                }
+                if (state.clearDeletesUnseen == !saved.unseenEventsProtection.onClearAll) return@withLock
+                val config = saved.copy(
+                    unseenEventsProtection = saved.unseenEventsProtection.copy(onClearAll = !state.clearDeletesUnseen),
+                )
+                try {
+                    repository.save(config)
+                    try {
+                        tracker.updateConfig(config)
+                    } catch (e: Exception) {
+                        rollback(saved)
+                        throw e
+                    }
+                    setState { copy(savedConfig = config) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    setState { copy(clearDeletesUnseen = !saved.unseenEventsProtection.onClearAll) }
+                    sendEffect(Effect.SaveFailed)
+                }
             }
         }
     }

@@ -3,6 +3,7 @@ package com.usatov.aura.logger.demo.main
 import com.usatov.aura.logger.demo.core.model.Section
 import com.usatov.aura.logger.demo.main.MainContract.Intent.SelectSection
 import com.usatov.aura.logger.demo.testing.FakeAppEvents
+import com.usatov.aura.logger.demo.testing.FakeDemoConfigRepository
 import com.usatov.aura.logger.demo.testing.MainDispatcherExtension
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,7 +17,7 @@ class MainViewModelTest {
     val main = MainDispatcherExtension()
 
     private val appEvents = FakeAppEvents()
-    private val vm = MainViewModel(appEvents)
+    private val vm = MainViewModel(appEvents, FakeDemoConfigRepository())
 
     @Test
     fun `starts on the dashboard without tracking`() {
