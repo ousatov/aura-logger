@@ -50,7 +50,9 @@ public interface EventStore {
 
     /**
      * Deletes the oldest events so that at most [maxEvents] events remain. When [keepUnseen] is
-     * `true`, unseen events are never deleted but still count towards [maxEvents]; then fewer
+     * `true`, unseen events are never deleted but still count towards [maxEvents]: seen events are
+     * deleted oldest first, wherever they are in the newest-first order (also seen events newer
+     * than unseen ones), until at most [maxEvents] events remain or no seen event is left; then fewer
      * events may be deleted than needed to reach the limit.
      * @return number of deleted events.
      */
@@ -58,7 +60,8 @@ public interface EventStore {
 
     /**
      * Emits after every committed change made through any instance that shares the same database
-     * in this process. Conflated; no initial value requirement.
+     * in this process. The observer may be registered asynchronously after collection starts;
+     * changes committed before that are not reported. Conflated; no initial value requirement.
      */
     public fun observeChanges(): Flow<Unit>
 }

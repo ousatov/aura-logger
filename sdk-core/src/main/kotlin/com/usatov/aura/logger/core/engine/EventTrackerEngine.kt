@@ -8,6 +8,7 @@ import com.usatov.aura.logger.core.EventStats
 import com.usatov.aura.logger.core.EventTracker
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.InternalAuraLoggerApi
+import com.usatov.aura.logger.core.LimitOverflowStrategy
 import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.TrackedEvent
 import com.usatov.aura.logger.core.internal.DayCalendar
@@ -50,6 +51,15 @@ import kotlin.time.Duration.Companion.seconds
  * [AuraLoggerSettings.preInitBufferCapacity] events (oldest dropped with a warning on overflow);
  * their ids and timestamps are generated at call time with [idGenerator] and [initialClock].
  * Input validation uses the validation values of [settings].
+ *
+ * Limit on write: when [AuraLoggerSettings.enforceLimitOnWrite] is `true`, every insert of new
+ * events (including the buffered events written on [start]) is followed, on the same write queue
+ * and before any later queued operation, by
+ * `EventStore.deleteOldestAbove(config.maxEvents, keepUnseen = config.unseenEventsProtection.onLimit)`
+ * with the latest config (from [start] or [updateConfig]). With
+ * [LimitOverflowStrategy.DROP_NEW_EVENTS], new events that would still exceed the limit after that
+ * deletion are dropped with a warning instead of being stored; with
+ * [LimitOverflowStrategy.KEEP_NEW_EVENTS] (default) they are always stored.
  *
  * @param initialClock clock used for events tracked before [start].
  */
