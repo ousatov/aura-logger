@@ -1,137 +1,123 @@
 package com.usatov.aura.logger.demo.events
 
-import com.usatov.aura.logger.core.EventCursor
-import com.usatov.aura.logger.core.EventPage
-import com.usatov.aura.logger.core.EventStats
-import com.usatov.aura.logger.core.EventTracker
-import com.usatov.aura.logger.core.EventTrackerConfig
-import com.usatov.aura.logger.core.PropertiesCodec
-import com.usatov.aura.logger.core.TrackedEvent
-import androidx.paging.PagingDataEvent
-import androidx.paging.PagingDataPresenter
+import androidx.paging.testing.asSnapshot
+import com.usatov.aura.logger.demo.core.time.ZoneProvider
+import com.usatov.aura.logger.demo.events.EventsContract.DayLabel
 import com.usatov.aura.logger.demo.events.EventsContract.EventListItem
 import com.usatov.aura.logger.demo.events.EventsContract.Intent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
+import com.usatov.aura.logger.demo.testing.FixedClock
+import com.usatov.aura.logger.demo.testing.millisOf
+import com.usatov.aura.logger.demo.testing.FakeEventTracker
+import com.usatov.aura.logger.demo.testing.MainDispatcherExtension
+import com.usatov.aura.logger.demo.testing.event
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.time.ZoneOffset
-import kotlin.time.Clock
+import org.junit.jupiter.api.extension.RegisterExtension
+import java.time.ZoneId
 
 class EventsViewModelTest {
 
-    private val dispatcher = UnconfinedTestDispatcher()
+    @JvmField
+    @RegisterExtension
+    val main = MainDispatcherExtension()
+
     private val tracker = FakeEventTracker()
-    private val formatter = EventFormatter { ZoneOffset.UTC }
+    private val clock = FixedClock(millisOf("UTC", 2026, 3, 15, 10))
+    private val zone = ZoneProvider { ZoneId.of("UTC") }
+    private val vm by lazy { EventsViewModel(tracker, EventFormatter(zone), clock, zone) }
 
-    @BeforeEach
-    fun setUp() {
-        Dispatchers.setMain(dispatcher)
-        repeat(3) { tracker.add("event_$it") }
-    }
+    private fun List<EventListItem>.ids() = filterIsInstance<EventListItem.Event>().map { it.item.id }
 
-    @AfterEach
-    fun tearDown() {
-        Dispatchers.resetMain()
+    @Test
+    fun `lists all events newest first`() = runTest(main.dispatcher) {
+        tracker.events = (50 downTo 1).map { event("e$it", it * 1000L) }
+
+        val items = vm.events.asSnapshot { appendScrollWhile { true } }
+
+        assertEquals((50 downTo 1).map { "e$it" }, items.ids())
     }
 
     @Test
-    fun `markSeen alone does not reload the list from the start`() = runTest(dispatcher) {
-        val viewModel = EventsViewModel(tracker, formatter, Clock.System) { ZoneOffset.UTC }
-        val presenter = present(viewModel)
-        advanceUntilIdle()
-        assertEquals(1, tracker.firstPageLoads)
-        assertEquals(listOf("id_2", "id_1", "id_0"), presenter.snapshot().items.eventIds())
+    fun `pages are requested with the contract page size`() = runTest(main.dispatcher) {
+        tracker.events = (300 downTo 1).map { event("e$it", it * 1000L) }
 
-        viewModel.onIntent(Intent.ItemsShown(listOf("id_0", "id_1")))
-        advanceUntilIdle()
-        viewModel.onIntent(Intent.ItemsShown(listOf("id_2")))
-        advanceUntilIdle()
+        val items = vm.events.asSnapshot { appendScrollWhile { true } }
 
-        assertEquals(listOf(listOf("id_0", "id_1"), listOf("id_2")), tracker.markSeenCalls)
-        assertEquals(1, tracker.firstPageLoads)
+        assertEquals(300, items.ids().size)
+        val appends = tracker.pageRequests.drop(1)
+        assertTrue(appends.isNotEmpty(), "expected append loads after the initial load")
+        assertTrue(appends.all { it.second == EventsContract.PAGE_SIZE }, "append sizes: ${appends.map { it.second }}")
     }
 
     @Test
-    fun `tracked and deleted events reload the list`() = runTest(dispatcher) {
-        val viewModel = EventsViewModel(tracker, formatter, Clock.System) { ZoneOffset.UTC }
-        val presenter = present(viewModel)
-        advanceUntilIdle()
+    fun `a change of events reloads the list`() = runTest(main.dispatcher) {
+        tracker.events = listOf(event("old", 1000))
+        assertEquals(listOf("old"), vm.events.asSnapshot().ids())
 
-        tracker.track("new_event")
-        advanceUntilIdle()
-        assertEquals(2, tracker.firstPageLoads)
-        assertEquals("id_3", presenter.snapshot().items.eventIds().first())
+        tracker.events = listOf(event("new", 2000), event("old", 1000))
+        tracker.changeFlow.emit(Unit)
+        runCurrent()
 
-        tracker.clearAll()
-        advanceUntilIdle()
-        assertEquals(3, tracker.firstPageLoads)
-        assertEquals(emptyList<String>(), presenter.snapshot().items.eventIds())
+        assertEquals(listOf("new", "old"), vm.events.asSnapshot().ids())
     }
 
-    /** Presents [EventsViewModel.events] like the UI does, so that pages are actually loaded. */
-    private fun TestScope.present(viewModel: EventsViewModel): PagingDataPresenter<EventListItem> {
-        val presenter = object : PagingDataPresenter<EventListItem>(mainContext = dispatcher) {
-            override suspend fun presentPagingDataEvent(event: PagingDataEvent<EventListItem>) = Unit
-        }
-        backgroundScope.launch { viewModel.events.collectLatest(presenter::collectFrom) }
-        return presenter
+    @Test
+    fun `day headers precede the newest event of each day`() = runTest(main.dispatcher) {
+        tracker.events = listOf(
+            event("t1", millisOf("UTC", 2026, 3, 15, 9)),
+            event("t2", millisOf("UTC", 2026, 3, 15, 8)),
+            event("y1", millisOf("UTC", 2026, 3, 14, 20)),
+            event("o1", millisOf("UTC", 2026, 3, 10, 12)),
+            event("o2", millisOf("UTC", 2026, 3, 10, 0)),
+        )
+
+        val items = vm.events.asSnapshot { appendScrollWhile { true } }
+
+        assertEquals(
+            listOf("H:15/03/2026:Today", "t1", "t2", "H:14/03/2026:Yesterday", "y1", "H:10/03/2026:10/03/2026", "o1", "o2"),
+            items.map {
+                when (it) {
+                    is EventListItem.Event -> it.item.id
+                    is EventListItem.DayHeader -> "H:${it.dayKey}:" + when (val label = it.label) {
+                        DayLabel.Today -> "Today"
+                        DayLabel.Yesterday -> "Yesterday"
+                        is DayLabel.Date -> label.text
+                    }
+                }
+            },
+        )
     }
 
-    /** Ids of the event rows, without day headers. */
-    private fun List<EventListItem?>.eventIds(): List<String> = filterIsInstance<EventListItem.Event>().map { it.item.id }
+    @Test
+    fun `shown items are reported as seen once`() = runTest(main.dispatcher) {
+        vm.onIntent(Intent.ItemsShown(listOf("a", "b")))
+        vm.onIntent(Intent.ItemsShown(listOf("b", "c")))
+        vm.onIntent(Intent.ItemsShown(listOf("a", "b", "c")))
+        runCurrent()
 
-    private class FakeEventTracker : EventTracker {
-        private val events = mutableListOf<TrackedEvent>()
-        private var nextId = 0
-        var firstPageLoads = 0
-        val markSeenCalls = mutableListOf<List<String>>()
+        assertEquals(listOf("a", "b", "c"), tracker.markedSeen.flatten())
+        assertEquals(setOf("a", "b", "c"), tracker.markedSeen.flatten().toSet())
+    }
 
-        override val changes = MutableSharedFlow<Unit>(extraBufferCapacity = 16)
+    @Test
+    fun `empty shown lists are ignored`() = runTest(main.dispatcher) {
+        vm.onIntent(Intent.ItemsShown(emptyList()))
+        runCurrent()
 
-        fun add(name: String) {
-            val id = nextId++
-            events.add(0, TrackedEvent("id_$id", name, emptyMap(), id.toLong(), "01/01/1970", seen = false))
-        }
+        assertTrue(tracker.markedSeen.isEmpty())
+    }
 
-        override fun track(name: String, properties: Map<String, String>) {
-            add(name)
-            changes.tryEmit(Unit)
-        }
+    @Test
+    fun `events already seen are not reported`() = runTest(main.dispatcher) {
+        tracker.events = listOf(event("seen", 2000, seen = true), event("unseen", 1000))
+        vm.events.asSnapshot()
 
-        override fun <T> track(name: String, properties: T, codec: PropertiesCodec<T>) =
-            track(name, codec.encode(properties))
+        vm.onIntent(Intent.ItemsShown(listOf("seen", "unseen")))
+        runCurrent()
 
-        override fun markSeen(eventIds: Collection<String>) {
-            markSeenCalls += eventIds.toList()
-            events.replaceAll { if (it.id in eventIds) it.copy(seen = true) else it }
-            changes.tryEmit(Unit)
-        }
-
-        override suspend fun getRecentEvents(limit: Int): List<TrackedEvent> = events.take(limit)
-
-        override suspend fun getEventsPage(cursor: EventCursor?, pageSize: Int): EventPage {
-            if (cursor == null) firstPageLoads++
-            return EventPage(events.take(pageSize), nextCursor = null)
-        }
-
-        override suspend fun getStats(): EventStats = EventStats(events.size, events.size, emptyList())
-
-        override suspend fun clearAll(): Int = events.size.also {
-            events.clear()
-            changes.tryEmit(Unit)
-        }
-
-        override suspend fun updateConfig(config: EventTrackerConfig) = Unit
+        assertEquals(listOf("unseen"), tracker.markedSeen.flatten())
     }
 }

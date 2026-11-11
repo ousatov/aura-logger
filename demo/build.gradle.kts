@@ -26,4 +26,19 @@ dependencies {
     implementation(libs.androidx.paging.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+
+    testImplementation(libs.androidx.paging.testing)
+    // Robolectric (for tests that need an Android Context) runs on JUnit 4 via the vintage engine.
+    testImplementation(libs.junit4)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+}
+
+tasks.withType<Test>().configureEach {
+    // Robolectric needs access to JDK internals on JDK 17+.
+    jvmArgs(
+        "--add-opens=java.base/java.io=ALL-UNNAMED",
+        "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+    )
 }
