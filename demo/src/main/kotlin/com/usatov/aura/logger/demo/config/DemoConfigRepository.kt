@@ -2,9 +2,14 @@ package com.usatov.aura.logger.demo.config
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.demo.core.di.DemoPreferences
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 /**
@@ -30,9 +35,32 @@ class DataStoreDemoConfigRepository @Inject constructor(
 ) : DemoConfigRepository {
 
     override val config: Flow<EventTrackerConfig>
-        get() = TODO("D5")
+        get() = dataStore.data
+            .map { it.toConfig() }
+            .distinctUntilChanged()
 
-    override suspend fun current(): EventTrackerConfig = TODO("D5")
+    override suspend fun current(): EventTrackerConfig = config.first()
 
-    override suspend fun save(config: EventTrackerConfig): Unit = TODO("D5")
+    override suspend fun save(config: EventTrackerConfig) {
+        dataStore.edit {
+            it[RETENTION_DAYS] = config.retentionDays
+            it[MAX_EVENTS] = config.maxEvents
+        }
+    }
+
+    private fun Preferences.toConfig(): EventTrackerConfig {
+        val retention = this[RETENTION_DAYS]
+        val maxEvents = this[MAX_EVENTS]
+        if (retention == null || maxEvents == null) return EventTrackerConfig()
+        return try {
+            EventTrackerConfig(retentionDays = retention, maxEvents = maxEvents)
+        } catch (_: IllegalArgumentException) {
+            EventTrackerConfig()
+        }
+    }
+
+    private companion object {
+        val RETENTION_DAYS = intPreferencesKey("config_retention_days")
+        val MAX_EVENTS = intPreferencesKey("config_max_events")
+    }
 }

@@ -5,6 +5,7 @@ import androidx.paging.PagingState
 import com.usatov.aura.logger.core.EventCursor
 import com.usatov.aura.logger.core.EventTracker
 import com.usatov.aura.logger.demo.events.EventsContract.EventItem
+import kotlinx.coroutines.CancellationException
 
 /**
  * Pages of `EventTracker.getEventsPage`, newest first.
@@ -20,7 +21,19 @@ class EventsPagingSource(
     private val formatter: EventFormatter,
 ) : PagingSource<EventCursor, EventItem>() {
 
-    override suspend fun load(params: LoadParams<EventCursor>): LoadResult<EventCursor, EventItem> = TODO("D3")
+    override suspend fun load(params: LoadParams<EventCursor>): LoadResult<EventCursor, EventItem> =
+        try {
+            val page = tracker.getEventsPage(cursor = params.key, pageSize = params.loadSize)
+            LoadResult.Page(
+                data = page.events.map(formatter::format),
+                prevKey = null,
+                nextKey = page.nextCursor,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            LoadResult.Error(e)
+        }
 
-    override fun getRefreshKey(state: PagingState<EventCursor, EventItem>): EventCursor? = TODO("D3")
+    override fun getRefreshKey(state: PagingState<EventCursor, EventItem>): EventCursor? = null
 }

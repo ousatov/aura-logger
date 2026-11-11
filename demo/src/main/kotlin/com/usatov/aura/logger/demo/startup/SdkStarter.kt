@@ -6,7 +6,9 @@ import com.usatov.aura.logger.demo.catalog.AppEvents
 import com.usatov.aura.logger.demo.config.DemoConfigRepository
 import com.usatov.aura.logger.demo.core.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Clock
 
@@ -37,5 +39,23 @@ class DefaultSdkStarter @Inject constructor(
     @param:ApplicationScope private val scope: CoroutineScope,
 ) : SdkStarter {
 
-    override fun start(): Unit = TODO("D1")
+    override fun start() {
+        runCatching { appEvents.processStarted() }
+        scope.launch {
+            val config = try {
+                configRepository.current()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                EventTrackerConfig()
+            }
+            try {
+                initializer.init(context, config, clock)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The SDK facade is documented not to throw; never crash the process from here.
+            }
+        }
+    }
 }
