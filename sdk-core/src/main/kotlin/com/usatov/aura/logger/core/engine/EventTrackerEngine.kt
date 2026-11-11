@@ -13,6 +13,8 @@ import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.TrackedEvent
 import com.usatov.aura.logger.core.internal.DayCalendar
 import com.usatov.aura.logger.core.internal.EventValidator
+import com.usatov.aura.logger.core.internal.InsertPolicy
+import com.usatov.aura.logger.core.internal.LimitEnforcingInsertPolicy
 import com.usatov.aura.logger.core.internal.PropertiesJson
 import com.usatov.aura.logger.core.internal.SerialWriteQueue
 import com.usatov.aura.logger.core.internal.WriteOp
@@ -108,8 +110,19 @@ public class EventTrackerEngine(
                 logger.warn("Aura Logger is already initialised; this call is ignored. Use updateConfig to change the config.")
                 return false
             }
-            val queue = SerialWriteQueue(dependencies.scope, dependencies.eventStore, logger)
-            val started = Running(dependencies, queue, dependencies.config)
+            val config = ConfigHolder(dependencies.config)
+            val insertPolicy = if (settings.enforceLimitOnWrite) {
+                LimitEnforcingInsertPolicy(
+                    eventStore = dependencies.eventStore,
+                    strategy = settings.limitOverflowStrategy,
+                    logger = logger,
+                    config = { config.value },
+                )
+            } else {
+                InsertPolicy.PLAIN
+            }
+            val queue = SerialWriteQueue(dependencies.scope, dependencies.eventStore, logger, insertPolicy)
+            val started = Running(dependencies, queue, config)
             queue.submit(WriteOp.Task("persist the config") { dependencies.configStore.write(dependencies.config) })
             queue.submit(WriteOp.Task("schedule the periodic cleanup") { dependencies.cleanupScheduler.schedulePeriodic() })
             if (preInitBuffer.isNotEmpty()) {
@@ -233,12 +246,12 @@ public class EventTrackerEngine(
     }
 
     override suspend fun clearAll(): Int = enqueueAndAwait("clear all events") { started ->
-        started.dependencies.eventStore.deleteAll(keepUnseen = started.config.unseenEventsProtection.onClearAll)
+        started.dependencies.eventStore.deleteAll(keepUnseen = started.config.value.unseenEventsProtection.onClearAll)
     }
 
     override suspend fun updateConfig(config: EventTrackerConfig): Unit = enqueueAndAwait("update the config") { started ->
         started.dependencies.configStore.write(config)
-        started.config = config
+        started.config.value = config
         try {
             started.dependencies.cleanupScheduler.scheduleOneTime()
         } catch (e: CancellationException) {
@@ -293,11 +306,13 @@ public class EventTrackerEngine(
     private class Running(
         val dependencies: EngineDependencies,
         val queue: SerialWriteQueue,
-        config: EventTrackerConfig,
-    ) {
-        /** Current retention policy; read and written only on the serial queue. */
+        val config: ConfigHolder,
+    )
+
+    /** Current retention policy (from [start] or [updateConfig]); read and written only on the serial queue. */
+    private class ConfigHolder(initial: EventTrackerConfig) {
         @Volatile
-        var config: EventTrackerConfig = config
+        var value: EventTrackerConfig = initial
     }
 
     private companion object {

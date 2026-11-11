@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Consecutive [WriteOp.Insert] operations are merged into one [EventStore.insert] call (one
  * transaction) of at most [maxBatchSize] events, so that bursts of `track` calls are written
  * efficiently. If a batch insert fails, its events are inserted one by one so that one bad
- * event does not lose the others.
+ * event does not lose the others. [insertPolicy] decides how each batch is written (for example,
+ * applying the event limit right after the write).
  *
  * The consumer runs in [scope]. If the scope is cancelled, pending and later operations are
  * abandoned: lost events are logged and awaiting callers fail with [IllegalStateException].
@@ -27,8 +28,19 @@ internal class SerialWriteQueue(
     scope: CoroutineScope,
     private val eventStore: EventStore,
     private val logger: AuraLogger,
+    private val insertPolicy: InsertPolicy = InsertPolicy.PLAIN,
     private val maxBatchSize: Int = DEFAULT_MAX_BATCH_SIZE,
 ) {
+    private val sink = object : InsertSink {
+        override suspend fun insert(records: List<NewEventRecord>) {
+            if (records.isNotEmpty()) this@SerialWriteQueue.insert(records)
+        }
+
+        override fun dropped(records: List<NewEventRecord>) {
+            unwrittenInBatch -= records.size
+        }
+    }
+
     private val channel = Channel<WriteOp>(
         capacity = Channel.UNLIMITED,
         onUndeliveredElement = { op -> op.abandon(logger) },
@@ -73,7 +85,7 @@ internal class SerialWriteQueue(
                             }
                         }
                         unwrittenInBatch = batch.size
-                        insert(batch)
+                        writeBatch(batch)
                     }
                     is WriteOp.Task<*> -> op.run(logger)
                 }
@@ -83,6 +95,17 @@ internal class SerialWriteQueue(
             abandonInFlight(inFlight)
             pending?.let { safely { it.abandon(logger) } }
         }
+    }
+
+    private suspend fun writeBatch(batch: List<NewEventRecord>) {
+        try {
+            insertPolicy.write(batch, sink)
+        } catch (e: Throwable) {
+            if (e is CancellationException && !currentCoroutineContext().isActive) throw e
+            // The policy handles storage errors itself; this is a last resort that keeps the queue running.
+            logger.error("Unexpected error while writing $unwrittenInBatch event(s); they are lost", e)
+        }
+        unwrittenInBatch = 0
     }
 
     /** Abandons operations taken from the channel; only the unwritten events of a batch are reported lost. */
