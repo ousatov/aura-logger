@@ -9,6 +9,7 @@ import com.usatov.aura.logger.demo.main.MainContract.State
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -21,8 +22,9 @@ class MainViewModel @Inject constructor(
     private val configRepository: DemoConfigRepository,
 ) : MviViewModel<State, Intent, Effect>(State()) {
 
+    /** The stored flag; `null` until the first value is read. */
     @Volatile
-    private var trackNavigation = true
+    private var trackNavigation: Boolean? = null
 
     init {
         viewModelScope.launch {
@@ -39,6 +41,14 @@ class MainViewModel @Inject constructor(
     private fun selectSection(intent: Intent.SelectSection) {
         if (intent.section == currentState.section) return
         setState { copy(section = intent.section) }
-        if (trackNavigation) appEvents.sectionSelected(intent.section)
+        val known = trackNavigation
+        if (known != null) {
+            if (known) appEvents.sectionSelected(intent.section)
+        } else {
+            // Not loaded yet: wait for the stored value instead of assuming "on".
+            viewModelScope.launch {
+                if (configRepository.trackNavigation.first()) appEvents.sectionSelected(intent.section)
+            }
+        }
     }
 }
