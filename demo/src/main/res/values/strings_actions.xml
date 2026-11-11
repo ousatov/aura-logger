@@ -13,6 +13,9 @@
         <item quantity="one">Tracked %d event</item>
         <item quantity="other">Tracked %d events</item>
     </plurals>
-    <string name="actions_cleared">Deleted %1$d events; unseen events are kept</string>
+    <plurals name="actions_cleared">
+        <item quantity="one">Deleted %d event</item>
+        <item quantity="other">Deleted %d events</item>
+    </plurals>
     <string name="actions_clear_failed">Failed to clear events</string>
 </resources>

@@ -42,7 +42,11 @@ fun ActionsSection(modifier: Modifier = Modifier) {
                     effect.count,
                     effect.count,
                 )
-                is Effect.Cleared -> resources.getString(R.string.actions_cleared, effect.deleted)
+                is Effect.Cleared -> resources.getQuantityString(
+                    R.plurals.actions_cleared,
+                    effect.deleted,
+                    effect.deleted,
+                )
                 Effect.ClearFailed -> resources.getString(R.string.actions_clear_failed)
             }
             snackbarHostState.currentSnackbarData?.dismiss()
