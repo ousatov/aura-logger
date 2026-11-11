@@ -108,6 +108,8 @@ runtime with the release build of the demo before the release.
   visible time or visible fraction.
 - **Custom events from the UI:** discussed and deliberately not implemented; the catalog of app events is fixed in
   code (`AppEvents`).
+- **Settings Save button:** remove it and save retention and max events the same way as the switches (when the
+  user leaves the Settings tab or the app goes to the background), so the whole screen behaves consistently.
 - **Limit protection switch:** Settings exposes only the Clear All protection; retention and limit protection stay
   on, as the assignment requires.
 
