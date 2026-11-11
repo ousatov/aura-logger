@@ -14,7 +14,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -100,7 +102,8 @@ class DataStoreConfigStoreTest {
     fun `config survives a new DataStore instance on the same file`() = runBlocking {
         val config = EventTrackerConfig(retentionDays = 2, maxEvents = 3)
         DataStoreConfigStore(newDataStore()).write(config)
-        scopes.forEach { it.cancel() }
+        // DataStore releases the file only when its scope's job has completed; cancel() alone is asynchronous.
+        scopes.forEach { it.coroutineContext.job.cancelAndJoin() }
         scopes.clear()
 
         assertEquals(config, DataStoreConfigStore(newDataStore()).read())
