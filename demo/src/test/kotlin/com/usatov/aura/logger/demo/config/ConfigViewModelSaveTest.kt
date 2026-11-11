@@ -66,6 +66,8 @@ class ConfigViewModelSaveTest {
         override suspend fun save(config: EventTrackerConfig) {
             stored.value = config
         }
+        override val trackNavigation: Flow<Boolean> = MutableStateFlow(true)
+        override suspend fun saveTrackNavigation(enabled: Boolean) = Unit
     }
 
     private class FakeTracker(private var failuresLeft: Int) : EventTracker {

@@ -1,6 +1,7 @@
 package com.usatov.aura.logger.demo.main
 
 import com.usatov.aura.logger.demo.catalog.AppEvents
+import com.usatov.aura.logger.demo.config.DemoConfigRepository
 import com.usatov.aura.logger.demo.core.mvi.MviViewModel
 import com.usatov.aura.logger.demo.main.MainContract.Effect
 import com.usatov.aura.logger.demo.main.MainContract.Intent
@@ -15,6 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val appEvents: AppEvents,
+    private val configRepository: DemoConfigRepository,
 ) : MviViewModel<State, Intent, Effect>(State()) {
 
     override fun onIntent(intent: Intent) {

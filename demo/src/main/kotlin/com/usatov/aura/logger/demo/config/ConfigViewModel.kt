@@ -65,6 +65,8 @@ class ConfigViewModel @Inject constructor(
                 )
             }
             Intent.Save -> save()
+            is Intent.TrackNavigationChanged, is Intent.ClearDeletesUnseenChanged, Intent.ScreenHidden -> Unit
+
         }
     }
 

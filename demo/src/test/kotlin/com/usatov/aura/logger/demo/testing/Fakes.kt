@@ -150,6 +150,13 @@ class FakeDemoConfigRepository(
         saved += config
         state.value = config
     }
+
+    val trackNavigationState = MutableStateFlow(true)
+    override val trackNavigation: Flow<Boolean> get() = trackNavigationState
+
+    override suspend fun saveTrackNavigation(enabled: Boolean) {
+        trackNavigationState.value = enabled
+    }
 }
 
 class FixedClock(var millis: Long) : Clock {
