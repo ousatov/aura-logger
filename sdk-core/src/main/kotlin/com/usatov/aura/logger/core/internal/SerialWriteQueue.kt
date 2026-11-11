@@ -45,26 +45,38 @@ internal class SerialWriteQueue(
     }
 
     private suspend fun consume() {
+        // Operations already taken out of the channel are no longer covered by
+        // onUndeliveredElement; they are abandoned here if the consumer is cancelled.
         var pending: WriteOp? = null
-        while (true) {
-            val op = pending ?: channel.receive()
-            pending = null
-            when (op) {
-                is WriteOp.Insert -> {
-                    val batch = ArrayList(op.records)
-                    while (batch.size < maxBatchSize) {
-                        val next = channel.tryReceive().getOrNull() ?: break
-                        if (next is WriteOp.Insert) {
-                            batch += next.records
-                        } else {
-                            pending = next
-                            break
+        val inFlight = ArrayList<WriteOp>()
+        try {
+            while (true) {
+                val op = pending ?: channel.receive()
+                pending = null
+                inFlight += op
+                when (op) {
+                    is WriteOp.Insert -> {
+                        val batch = ArrayList(op.records)
+                        while (batch.size < maxBatchSize) {
+                            val next = channel.tryReceive().getOrNull() ?: break
+                            if (next is WriteOp.Insert) {
+                                inFlight += next
+                                batch += next.records
+                            } else {
+                                pending = next
+                                break
+                            }
                         }
+                        insert(batch)
                     }
-                    insert(batch)
+                    is WriteOp.Task<*> -> op.run(logger)
                 }
-                is WriteOp.Task<*> -> op.run(logger)
+                inFlight.clear()
             }
+        } catch (e: CancellationException) {
+            inFlight.forEach { it.abandon(logger) }
+            pending?.abandon(logger)
+            throw e
         }
     }
 
