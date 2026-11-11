@@ -58,21 +58,31 @@ internal abstract class EventDao {
     abstract suspend fun deleteOlderThan(timestamp: Long, keepUnseen: Boolean): Int
 
     /**
-     * Deletes the events after the newest [maxEvents] ones. Protected unseen events are kept but
-     * still occupy their place in the ranking, so they count towards the limit.
+     * Deletes the oldest events so that at most [maxEvents] remain. With [keepUnseen], only seen
+     * events are deleted, oldest first wherever they are in the list (also seen events newer than
+     * unseen ones), until the limit is reached or no seen event is left.
      */
+    @Transaction
+    open suspend fun deleteOldestAbove(maxEvents: Int, keepUnseen: Boolean): Int {
+        val excess = count() - maxEvents
+        // SQLite treats a negative LIMIT as "no limit", so the guard is required.
+        if (excess <= 0) return 0
+        return deleteOldest(excess, keepUnseen)
+    }
+
+    /** Deletes the [count] oldest events; with [keepUnseen], the [count] oldest seen events. */
     @Query(
         """
         DELETE FROM events
-        WHERE (:keepUnseen = 0 OR seen = 1)
-        AND sequence IN (
+        WHERE sequence IN (
             SELECT sequence FROM events
-            ORDER BY timestamp DESC, sequence DESC
-            LIMIT -1 OFFSET :maxEvents
+            WHERE :keepUnseen = 0 OR seen = 1
+            ORDER BY timestamp ASC, sequence ASC
+            LIMIT :count
         )
         """,
     )
-    abstract suspend fun deleteOldestAbove(maxEvents: Int, keepUnseen: Boolean): Int
+    protected abstract suspend fun deleteOldest(count: Int, keepUnseen: Boolean): Int
 
     private companion object {
         /** Below the historical SQLite limit of 999 bound variables per statement. */
