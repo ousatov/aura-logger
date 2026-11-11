@@ -128,7 +128,7 @@ class EngineTrackingTest {
                 "quote\"key" to "value with \"quotes\"",
                 "back\\slash" to "C:\\path\\file",
                 "multi\nline" to "line1\nline2\r\n\ttab",
-                "unicode" to "Привіт 👋 日本語",
+                "unicode" to "\u041F\u0440\u0438\u0432\u0456\u0442 \uD83D\uDC4B \u65E5\u672C\u8A9E", // Cyrillic, an emoji (surrogate pair) and CJK
                 "json" to "{\"nested\": [1, 2]}",
                 "null" to "null",
                 "empty" to "",
@@ -136,11 +136,11 @@ class EngineTrackingTest {
                 "html" to "<script>alert('x')</script>",
             )
 
-            h.engine.track("weird \"name\"\n👋", properties)
+            h.engine.track("weird \"name\"\n\uD83D\uDC4B", properties)
             runCurrent()
 
             val event = h.engine.getRecentEvents(1).single()
-            assertEquals("weird \"name\"\n👋", event.name)
+            assertEquals("weird \"name\"\n\uD83D\uDC4B", event.name)
             assertEquals(properties, event.properties)
             assertEquals(properties, decode(h.store.all.single().propertiesJson))
         }

@@ -46,7 +46,7 @@ abstract class EventStoreContract {
 
     @Test
     fun insertStoresAllFieldsAndEventsAreUnseen() = runBlocking {
-        val record = rec("a", 1_000, json = """{"k":"v \"quoted\" Привіт 👋"}""", name = "weird \n name")
+        val record = rec("a", 1_000, json = "{\"k\":\"v \\\"quoted\\\" \u041F\u0440\u0438\u0432\u0456\u0442 \uD83D\uDC4B\"}", name = "weird \n name")
         store.insert(listOf(record))
 
         val stored = store.getNewest(10).single()
