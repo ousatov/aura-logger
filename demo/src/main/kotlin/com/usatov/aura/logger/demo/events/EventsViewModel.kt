@@ -38,7 +38,7 @@ import kotlin.time.Clock
  * in the ViewModel scope, and invalidates its paging source on every `EventTracker.changes`
  * emission so that new and deleted events appear. A [EventListItem.DayHeader] is inserted before
  * the first event and wherever the day changes between two neighbours; "today" is taken from
- * [clock] in the [zoneProvider] zone each time a page set is emitted. See
+ * [clock] in the [zoneProvider] zone each time [events] is collected or emits. See
  * [EventsContract.Intent.ItemsShown] for seen tracking. Rows reported with `markSeen` are shown as
  * seen at once, without reloading the list.
  */
@@ -74,8 +74,14 @@ class EventsViewModel @Inject constructor(
             .map(::withDayHeaders)
             .cachedIn(viewModelScope)
 
+    /**
+     * Day labels are applied here, outside the cached flow, so "Today" / "Yesterday" are computed
+     * again whenever the list is collected (for example when the user comes back to the tab after a
+     * day change or a debug time shift), not only when pages are loaded.
+     */
     val events: Flow<PagingData<EventListItem>> = combine(pagedEvents, reportedSeen) { data, seen ->
-        if (seen.isEmpty()) data else data.map { entry -> entry.markedSeenIfIn(seen) }
+        val labels = currentDayLabels()
+        data.map { entry -> entry.markedSeenIfIn(seen).labelled(labels) }
     }
 
     init {
@@ -106,10 +112,24 @@ class EventsViewModel @Inject constructor(
     private fun EventListItem.markedSeenIfIn(seen: Set<String>): EventListItem =
         if (this is EventListItem.Event && !item.seen && item.id in seen) EventListItem.Event(item.copy(seen = true)) else this
 
-    private fun withDayHeaders(data: PagingData<EventItem>): PagingData<EventListItem> {
+    /** Day keys (`DD/MM/YYYY`) of today and yesterday from [clock] in the current zone. */
+    private fun currentDayLabels(): Pair<String, String> {
         val today = Instant.ofEpochMilli(clock.now().toEpochMilliseconds()).atZone(zoneProvider.zone()).toLocalDate()
-        val todayKey = DAY_FORMAT.format(today)
-        val yesterdayKey = DAY_FORMAT.format(today.minusDays(1))
+        return DAY_FORMAT.format(today) to DAY_FORMAT.format(today.minusDays(1))
+    }
+
+    private fun EventListItem.labelled(labels: Pair<String, String>): EventListItem {
+        if (this !is EventListItem.DayHeader) return this
+        val label = when (dayKey) {
+            labels.first -> DayLabel.Today
+            labels.second -> DayLabel.Yesterday
+            else -> DayLabel.Date(dayKey)
+        }
+        return if (label == this.label) this else copy(label = label)
+    }
+
+    /** Inserts day headers; their labels are set later by [labelled]. */
+    private fun withDayHeaders(data: PagingData<EventItem>): PagingData<EventListItem> {
         return data
             .map<EventItem, EventListItem> { EventListItem.Event(it) }
             .insertSeparators { before, after ->
@@ -118,12 +138,7 @@ class EventsViewModel @Inject constructor(
                 if (afterDay == beforeDay) {
                     null
                 } else {
-                    val label = when (afterDay) {
-                        todayKey -> DayLabel.Today
-                        yesterdayKey -> DayLabel.Yesterday
-                        else -> DayLabel.Date(afterDay)
-                    }
-                    EventListItem.DayHeader(dayKey = afterDay, label = label)
+                    EventListItem.DayHeader(dayKey = afterDay, label = DayLabel.Date(afterDay))
                 }
             }
     }

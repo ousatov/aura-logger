@@ -21,7 +21,7 @@ Independent validation of code written by other Claude sessions, so that review 
 - `.git/hooks/post-commit`: after each non-merge commit it starts a fresh-context, read-only reviewer in the background.
   - Allowed tools: `Read`, `Grep`, `Glob`, `git show`, `git diff`, `git log`.
   - The reviewer is told not to read `docs/impl-notes.md` or `docs/ai-notes/`.
-  - The report goes to `~/aura-reviews/<date>-<sha>.md` and ends with `_status: clean|findings|failed_`.
+  - The report goes to a directory outside the repository (one file per commit) and ends with `_status: clean|findings|failed_`.
   - A 600 s watchdog kills hung reviews.
 - Alerts:
   - per commit, on findings or failure, with an Open button for the report;

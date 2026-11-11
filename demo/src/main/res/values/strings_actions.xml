@@ -6,7 +6,7 @@
     <string name="actions_track_with_properties">Track with Properties</string>
     <string name="actions_clear_all">Clear All Events</string>
     <string name="actions_clear_dialog_title">Clear all events?</string>
-    <string name="actions_clear_dialog_message">Seen events will be deleted. Unseen events are kept: open them in Events to make them clearable.</string>
+    <string name="actions_clear_dialog_message">Seen events will be deleted. Unseen events are kept, unless \"Clear All also deletes unseen events\" is on in Settings.</string>
     <string name="actions_clear_confirm">Clear</string>
     <string name="actions_clear_cancel">Cancel</string>
     <plurals name="actions_tracked">
