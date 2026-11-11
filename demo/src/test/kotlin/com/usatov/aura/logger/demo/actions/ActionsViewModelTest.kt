@@ -1,6 +1,7 @@
 package com.usatov.aura.logger.demo.actions
 
 import app.cash.turbine.test
+import com.usatov.aura.logger.core.EventStats
 import com.usatov.aura.logger.demo.actions.ActionsContract.Effect
 import com.usatov.aura.logger.demo.actions.ActionsContract.Intent
 import com.usatov.aura.logger.demo.testing.CallLog
@@ -73,13 +74,14 @@ class ActionsViewModelTest {
     @Test
     fun `confirmed clear runs clearAll, tracks the result and reports it`() = runTest(main.dispatcher) {
         tracker.clearResult = 12
+        tracker.stats = EventStats(totalCount = 5, todayCount = 5, dailyCounts = emptyList())
         vm.onIntent(Intent.ClearRequested)
 
         vm.effects.test {
             vm.onIntent(Intent.ClearConfirmed)
             assertFalse(vm.state.value.confirmClear)
             runCurrent()
-            assertEquals(Effect.Cleared(12), awaitItem())
+            assertEquals(Effect.Cleared(deleted = 12, kept = 5), awaitItem())
         }
         assertFalse(vm.state.value.isClearing)
         assertEquals(listOf("clearAll", "appEvents:eventsCleared:12"), log.calls)
@@ -102,6 +104,20 @@ class ActionsViewModelTest {
         tracker.clearGate!!.complete(Unit)
         runCurrent()
         assertFalse(vm.state.value.isClearing)
+    }
+
+    @Test
+    fun `kept is unknown when the remaining count cannot be read, the clear still succeeds`() = runTest(main.dispatcher) {
+        tracker.clearResult = 3
+        tracker.statsFailure = IllegalStateException("db")
+        vm.onIntent(Intent.ClearRequested)
+
+        vm.effects.test {
+            vm.onIntent(Intent.ClearConfirmed)
+            runCurrent()
+            assertEquals(Effect.Cleared(deleted = 3, kept = null), awaitItem())
+        }
+        assertTrue("eventsCleared:3" in appEvents.calls)
     }
 
     @Test

@@ -2,7 +2,11 @@ package com.usatov.aura.logger.demo.events
 
 import androidx.paging.testing.asSnapshot
 import com.usatov.aura.logger.demo.core.time.ZoneProvider
+import com.usatov.aura.logger.demo.events.EventsContract.DayLabel
+import com.usatov.aura.logger.demo.events.EventsContract.EventListItem
 import com.usatov.aura.logger.demo.events.EventsContract.Intent
+import com.usatov.aura.logger.demo.testing.FixedClock
+import com.usatov.aura.logger.demo.testing.millisOf
 import com.usatov.aura.logger.demo.testing.FakeEventTracker
 import com.usatov.aura.logger.demo.testing.MainDispatcherExtension
 import com.usatov.aura.logger.demo.testing.event
@@ -21,7 +25,11 @@ class EventsViewModelTest {
     val main = MainDispatcherExtension()
 
     private val tracker = FakeEventTracker()
-    private val vm by lazy { EventsViewModel(tracker, EventFormatter(ZoneProvider { ZoneId.of("UTC") })) }
+    private val clock = FixedClock(millisOf("UTC", 2026, 3, 15, 10))
+    private val zone = ZoneProvider { ZoneId.of("UTC") }
+    private val vm by lazy { EventsViewModel(tracker, EventFormatter(zone), clock, zone) }
+
+    private fun List<EventListItem>.ids() = filterIsInstance<EventListItem.Event>().map { it.item.id }
 
     @Test
     fun `lists all events newest first`() = runTest(main.dispatcher) {
@@ -29,7 +37,7 @@ class EventsViewModelTest {
 
         val items = vm.events.asSnapshot { appendScrollWhile { true } }
 
-        assertEquals((50 downTo 1).map { "e$it" }, items.map { it.id })
+        assertEquals((50 downTo 1).map { "e$it" }, items.ids())
     }
 
     @Test
@@ -38,7 +46,7 @@ class EventsViewModelTest {
 
         val items = vm.events.asSnapshot { appendScrollWhile { true } }
 
-        assertEquals(300, items.size)
+        assertEquals(300, items.ids().size)
         val appends = tracker.pageRequests.drop(1)
         assertTrue(appends.isNotEmpty(), "expected append loads after the initial load")
         assertTrue(appends.all { it.second == EventsContract.PAGE_SIZE }, "append sizes: ${appends.map { it.second }}")
@@ -47,13 +55,40 @@ class EventsViewModelTest {
     @Test
     fun `a change of events reloads the list`() = runTest(main.dispatcher) {
         tracker.events = listOf(event("old", 1000))
-        assertEquals(listOf("old"), vm.events.asSnapshot().map { it.id })
+        assertEquals(listOf("old"), vm.events.asSnapshot().ids())
 
         tracker.events = listOf(event("new", 2000), event("old", 1000))
         tracker.changeFlow.emit(Unit)
         runCurrent()
 
-        assertEquals(listOf("new", "old"), vm.events.asSnapshot().map { it.id })
+        assertEquals(listOf("new", "old"), vm.events.asSnapshot().ids())
+    }
+
+    @Test
+    fun `day headers precede the newest event of each day`() = runTest(main.dispatcher) {
+        tracker.events = listOf(
+            event("t1", millisOf("UTC", 2026, 3, 15, 9)),
+            event("t2", millisOf("UTC", 2026, 3, 15, 8)),
+            event("y1", millisOf("UTC", 2026, 3, 14, 20)),
+            event("o1", millisOf("UTC", 2026, 3, 10, 12)),
+            event("o2", millisOf("UTC", 2026, 3, 10, 0)),
+        )
+
+        val items = vm.events.asSnapshot { appendScrollWhile { true } }
+
+        assertEquals(
+            listOf("H:15/03/2026:Today", "t1", "t2", "H:14/03/2026:Yesterday", "y1", "H:10/03/2026:10/03/2026", "o1", "o2"),
+            items.map {
+                when (it) {
+                    is EventListItem.Event -> it.item.id
+                    is EventListItem.DayHeader -> "H:${it.dayKey}:" + when (val label = it.label) {
+                        DayLabel.Today -> "Today"
+                        DayLabel.Yesterday -> "Yesterday"
+                        is DayLabel.Date -> label.text
+                    }
+                }
+            },
+        )
     }
 
     @Test
