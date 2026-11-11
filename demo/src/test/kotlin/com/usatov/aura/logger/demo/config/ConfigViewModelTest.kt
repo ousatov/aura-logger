@@ -125,6 +125,46 @@ class ConfigViewModelTest {
     }
 
     @Nested
+    inner class LeavingTheScreen {
+        @Test
+        fun `valid changed inputs are saved when the screen is left`() = runTest(main.dispatcher) {
+            val vm = loaded()
+            vm.onIntent(Intent.RetentionChanged("14"))
+
+            vm.onIntent(Intent.ScreenHidden)
+            runCurrent()
+
+            assertEquals(listOf(EventTrackerConfig(retentionDays = 14, maxEvents = 100)), repository.saved)
+            assertEquals(listOf("save", "updateConfig", "appEvents:configChanged:14/100"), log.calls)
+        }
+
+        @Test
+        fun `invalid inputs are discarded when the screen is left`() = runTest(main.dispatcher) {
+            val vm = loaded()
+            vm.onIntent(Intent.RetentionChanged("0"))
+            vm.onIntent(Intent.MaxEventsChanged("abc"))
+
+            vm.onIntent(Intent.ScreenHidden)
+            runCurrent()
+
+            assertEquals("7", vm.state.value.retentionInput)
+            assertEquals("100", vm.state.value.maxEventsInput)
+            assertNull(vm.state.value.retentionError)
+            assertTrue(repository.saved.isEmpty())
+        }
+
+        @Test
+        fun `nothing is saved when nothing changed`() = runTest(main.dispatcher) {
+            val vm = loaded()
+
+            vm.onIntent(Intent.ScreenHidden)
+            runCurrent()
+
+            assertTrue(log.calls.isEmpty())
+        }
+    }
+
+    @Nested
     inner class CanSave {
         @Test
         fun `values equal to the saved config do not enable Save`() = runTest(main.dispatcher) {

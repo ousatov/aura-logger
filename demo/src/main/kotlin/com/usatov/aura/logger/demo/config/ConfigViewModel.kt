@@ -86,8 +86,28 @@ class ConfigViewModel @Inject constructor(
             Intent.Save -> save()
             is Intent.TrackNavigationChanged -> setState { copy(trackNavigation = intent.enabled) }
             is Intent.ClearDeletesUnseenChanged -> setState { copy(clearDeletesUnseen = intent.enabled) }
-            Intent.ScreenHidden -> persistSwitches()
+            Intent.ScreenHidden -> onScreenHidden()
         }
+    }
+
+    /** Saves valid changed inputs (as [Intent.Save] does), discards invalid ones, then the switches. */
+    private fun onScreenHidden() {
+        val state = currentState
+        val saved = state.savedConfig
+        if (saved != null && (state.retentionError != null || state.maxEventsError != null)) {
+            setState {
+                copy(
+                    retentionInput = saved.retentionDays.toString(),
+                    maxEventsInput = saved.maxEvents.toString(),
+                    retentionError = null,
+                    maxEventsError = null,
+                )
+            }
+        } else {
+            save()
+        }
+        // The mutex is fair, so the switches are saved after the inputs and build on them.
+        persistSwitches()
     }
 
     private fun save() {
