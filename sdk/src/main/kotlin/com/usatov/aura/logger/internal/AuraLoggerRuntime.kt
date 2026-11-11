@@ -7,7 +7,6 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
-import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.work.WorkManager
 import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.engine.EventTrackerEngine
@@ -24,6 +23,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 import java.util.TimeZone
 import java.util.UUID
 import kotlin.time.Clock
@@ -83,7 +83,9 @@ internal object AuraLoggerRuntime {
     fun cleanupScheduler(context: Context): CleanupScheduler =
         try {
             WorkManagerCleanupScheduler(WorkManager.getInstance(context.applicationContext ?: context), settings)
-        } catch (e: IllegalStateException) {
+        } catch (e: Exception) {
+            // IllegalStateException when WorkManager is not initialised; any other failure (for
+            // example with a context without an application context) must not prevent init either.
             logger.error("WorkManager is not available; background cleanup is disabled", e)
             UnavailableCleanupScheduler
         }
@@ -98,10 +100,20 @@ internal object AuraLoggerRuntime {
                     emptyPreferences()
                 },
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-                produceFile = { appContext.preferencesDataStoreFile(settings.configFileName) },
+                produceFile = { configFile(appContext) },
             )
         }.also { dataStore = it }
     }
+
+    /**
+     * File of the persisted config, resolved from the context that is actually used.
+     *
+     * Same path as `preferencesDataStoreFile(name)` (`filesDir/datastore/<name>.preferences_pb`),
+     * which cannot be used because it calls `getApplicationContext()` again and fails when that is
+     * `null` (the fallback of `init`).
+     */
+    private fun configFile(context: Context): File =
+        File(context.filesDir, "datastore/${settings.configFileName}.preferences_pb")
 
     private object UnavailableCleanupScheduler : CleanupScheduler {
         override fun schedulePeriodic() {

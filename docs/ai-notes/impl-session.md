@@ -61,6 +61,20 @@ confirmed and fixed in one commit:
 - a task without an awaiting caller logged nothing when the queue stopped mid-run; it now logs;
 - a stopped batch reported all its events as lost; now only the unwritten ones are reported.
 
+## Reconciliation fixes (issues #4, #5, #6)
+Reconciliation against the independently written tests found three problems; the spec branch
+`feature/sdk-limit-spec` (clarified KDoc, two internal settings) was merged first.
+- #4: `deleteOldestAbove` used a "window" reading (delete seen events ranked after position
+  `maxEvents`), so a reachable limit was not reached. Rewritten as "delete the `count - maxEvents`
+  oldest (seen) events" in one transaction; both issue examples were checked with the `sqlite3`
+  CLI before the change. A negative `LIMIT` means "no limit" in SQLite, so the excess is guarded.
+- #5: the limit is now also applied right after every write, through a pluggable insert policy of
+  the write queue (`LimitEnforcingInsertPolicy`), including `DROP_NEW_EVENTS` as an equivalent
+  batch step (`docs/impl-notes.md` #27).
+- #6: `preferencesDataStoreFile` calls `getApplicationContext()` again internally (confirmed in the
+  androidx source), which defeated the `applicationContext ?: context` fallback. The file is now
+  built from the context in use, at the same path.
+
 Lesson: the first draft relied on `onUndeliveredElement` for every operation and missed that
 `receive()`/`tryReceive()` hand ownership to the consumer. Cancellation paths need the same care as
 the normal path.
