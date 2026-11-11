@@ -1,5 +1,6 @@
 package com.usatov.aura.logger.demo.main
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,7 @@ import com.usatov.aura.logger.demo.R
 import com.usatov.aura.logger.demo.actions.ActionsSection
 import com.usatov.aura.logger.demo.config.ConfigSection
 import com.usatov.aura.logger.demo.core.model.Section
+import com.usatov.aura.logger.demo.core.ui.Dimens
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
 import com.usatov.aura.logger.demo.debug.DebugToolsSection
 import com.usatov.aura.logger.demo.events.EventsScreen
@@ -57,13 +59,22 @@ fun MainScreen(viewModel: MainViewModel = hiltViewModel()) {
             },
         ) { padding ->
             val modifier = Modifier.fillMaxSize().padding(padding)
+            val scrollModifier = modifier
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = Dimens.ScreenVertical)
             when (state.section) {
-                Section.DASHBOARD -> Column(modifier.verticalScroll(rememberScrollState())) {
+                Section.DASHBOARD -> Column(
+                    scrollModifier,
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SectionSpacing),
+                ) {
                     StatsSection()
                     ActionsSection()
                 }
                 Section.EVENTS -> EventsScreen(modifier)
-                Section.SETTINGS -> Column(modifier.verticalScroll(rememberScrollState())) {
+                Section.SETTINGS -> Column(
+                    scrollModifier,
+                    verticalArrangement = Arrangement.spacedBy(Dimens.SectionSpacing),
+                ) {
                     ConfigSection()
                     DebugToolsSection()
                 }
