@@ -20,6 +20,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,12 +38,15 @@ import com.usatov.aura.logger.demo.R
 import com.usatov.aura.logger.demo.events.EventsContract.DayLabel
 import com.usatov.aura.logger.demo.events.EventsContract.EventItem
 import com.usatov.aura.logger.demo.events.EventsContract.EventListItem
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/** Delay after the last scroll before the displayed rows are reported as shown. */
-private const val SHOWN_DEBOUNCE_MILLIS = 500L
+/** Interval at which displayed rows collected since the last report are reported as shown. */
+private const val SHOWN_FLUSH_MILLIS = 300L
+
+/** Number of pending displayed rows that triggers a report before the interval elapses. */
+private const val SHOWN_FLUSH_BATCH = 50
 
 /**
  * Events tab: the paged list (timestamp, name, properties if any), newest first, grouped under
@@ -55,7 +60,7 @@ fun EventsScreen(modifier: Modifier = Modifier) {
     val items = viewModel.events.collectAsLazyPagingItems()
     val listState = rememberLazyListState()
 
-    ReportShownItems(listState, items) { ids -> viewModel.onIntent(EventsContract.Intent.ItemsShown(ids)) }
+    ReportShownItems(listState) { ids -> viewModel.onIntent(EventsContract.Intent.ItemsShown(ids)) }
 
     val refresh = items.loadState.refresh
     when {
@@ -68,24 +73,53 @@ fun EventsScreen(modifier: Modifier = Modifier) {
     }
 }
 
-@OptIn(FlowPreview::class)
+/**
+ * Reports every event row that was laid out on screen, also rows that only passed by during a
+ * fling: visible keys are collected on every layout change, accumulated, flushed every
+ * [SHOWN_FLUSH_MILLIS] or once [SHOWN_FLUSH_BATCH] ids are pending, and the rest is flushed when the
+ * screen leaves composition. Rows are identified by their list key (the event id), not by index,
+ * so a list reload cannot map a position to a different event. Already-seen events are deduplicated
+ * by the ViewModel.
+ */
 @Composable
-private fun ReportShownItems(
-    listState: LazyListState,
-    items: LazyPagingItems<EventListItem>,
-    onShown: (List<String>) -> Unit,
-) {
-    LaunchedEffect(listState, items) {
-        snapshotFlow {
-            listState.layoutInfo.visibleItemsInfo
-                .filter { it.index < items.itemCount }
-                .mapNotNull { (items.peek(it.index) as? EventListItem.Event)?.item?.takeUnless(EventItem::seen)?.id }
+private fun ReportShownItems(listState: LazyListState, onShown: (List<String>) -> Unit) {
+    val currentOnShown by rememberUpdatedState(onShown)
+    LaunchedEffect(listState) {
+        val reported = HashSet<String>()
+        val pending = LinkedHashSet<String>()
+        fun flush() {
+            if (pending.isEmpty()) return
+            val ids = pending.toList()
+            pending.clear()
+            currentOnShown(ids)
         }
-            .distinctUntilChanged()
-            .debounce(SHOWN_DEBOUNCE_MILLIS)
-            .collect { ids -> if (ids.isNotEmpty()) onShown(ids) }
+        try {
+            coroutineScope {
+                launch {
+                    while (true) {
+                        delay(SHOWN_FLUSH_MILLIS)
+                        flush()
+                    }
+                }
+                snapshotFlow { listState.layoutInfo.visibleItemsInfo.mapNotNull { eventIdOf(it.key) } }
+                    .collect { ids ->
+                        ids.filterTo(pending) { reported.add(it) }
+                        if (pending.size >= SHOWN_FLUSH_BATCH) flush()
+                    }
+            }
+        } finally {
+            // Leaving composition cancels this effect; report what was shown but not flushed yet.
+            flush()
+        }
     }
 }
+
+private const val EVENT_KEY_PREFIX = "event:"
+
+private fun eventKey(id: String): String = EVENT_KEY_PREFIX + id
+
+private fun eventIdOf(key: Any): String? = (key as? String)?.takeIf { it.startsWith(EVENT_KEY_PREFIX) }
+    ?.removePrefix(EVENT_KEY_PREFIX)
 
 @Composable
 private fun EventsList(items: LazyPagingItems<EventListItem>, listState: LazyListState, modifier: Modifier) {
@@ -108,7 +142,7 @@ private fun EventsList(items: LazyPagingItems<EventListItem>, listState: LazyLis
                         items[index]
                         DayHeaderRow(entry.label)
                     }
-                    else -> item(key = (entry as? EventListItem.Event)?.item?.id ?: "pending_$index", contentType = "event") {
+                    else -> item(key = (entry as? EventListItem.Event)?.item?.id?.let(::eventKey) ?: "pending_$index", contentType = "event") {
                         (items[index] as? EventListItem.Event)?.let { EventRow(it.item) }
                     }
                 }

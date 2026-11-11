@@ -14,6 +14,11 @@ Raw material for `AI_COMMUNICATION.md`. Keep it short (about 40 lines), specific
   already formatted timestamp, so headers and rows always agree on the zone.
 - Kept the "shown" hint outside the `LazyColumn`, so list indices still equal paging indices for seen reporting.
 
+- #24: confirmed the debounce cause by reading the old code (only the settled layout was reported, the
+  pending report was dropped on dispose). Replaced it with collect-every-layout + 300 ms / 50-id flush +
+  flush in `finally` when the effect is cancelled; rows are identified by list key (`event:<id>`), not by
+  index, so a reload after `changes` cannot map a position to another event.
+
 ## Where AI was wrong or had to iterate
 - First draft keyed sticky headers by `dayKey` alone and claimed in KDoc it is unique; a time zone change
   between page loads can repeat a day and crash `LazyColumn` on a duplicate key. Key now includes the id of the
@@ -23,7 +28,8 @@ Raw material for `AI_COMMUNICATION.md`. Keep it short (about 40 lines), specific
 
 ## Verification
 - `./gradlew :demo:assembleDebug :demo:assembleRelease :demo:lintDebug` per PR: green, no lint findings in `events/`.
-- Not verified on a device by this session: visual look of badges/headers, sticky header behaviour.
+- Not verified on a device by this session: visual look of badges/headers, sticky header behaviour, and the
+  #24 manual check (100 events, fast scroll to the end, Clear All deletes 100).
 
 ## AI version vs final version
 ```kotlin
@@ -35,4 +41,4 @@ stickyHeader(key = headerKey(items, index, entry), contentType = "header") { ite
 Unique keys and `items[index]` so that headers also trigger page loads.
 
 ## Time
-- 22:50–23:20 for #22/#25 (git timestamps); #24 see below. Estimated 1 h of manual work saved.
+- 22:50–23:20 for #22/#25 (git timestamps); #24 23:20–23:30. Estimated 1 h of manual work saved.
