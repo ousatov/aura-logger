@@ -11,8 +11,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.getValue
@@ -23,6 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.usatov.aura.logger.demo.R
 import com.usatov.aura.logger.demo.config.ConfigContract.Effect
@@ -32,7 +36,7 @@ import com.usatov.aura.logger.demo.core.ui.Dimens
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
 import com.usatov.aura.logger.demo.core.ui.showLatest
 
-/** Settings: retention period and max events fields with validation and a Save button. */
+/** Settings: retention and max events fields with a Save button, and two switches saved when the tab is left. */
 @Composable
 fun ConfigSection(modifier: Modifier = Modifier) {
     val viewModel: ConfigViewModel = hiltViewModel()
@@ -49,6 +53,13 @@ fun ConfigSection(modifier: Modifier = Modifier) {
             snackbarHostState.showLatest(message)
         }
     }
+
+    // Persist pending switch changes when the tab is left (the section leaves composition) ...
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.onIntent(Intent.ScreenHidden) }
+    }
+    // ... and when the app goes to the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onIntent(Intent.ScreenHidden) }
 
     val loaded = state.savedConfig != null
     Column(
@@ -72,6 +83,19 @@ fun ConfigSection(modifier: Modifier = Modifier) {
             enabled = loaded && !state.isSaving,
             onChange = { viewModel.onIntent(Intent.MaxEventsChanged(it)) },
         )
+        SwitchRow(
+            label = stringResource(R.string.config_track_navigation_label),
+            checked = state.trackNavigation,
+            enabled = loaded,
+            onChange = { viewModel.onIntent(Intent.TrackNavigationChanged(it)) },
+        )
+        SwitchRow(
+            label = stringResource(R.string.config_clear_unseen_label),
+            hint = stringResource(R.string.config_clear_unseen_hint),
+            checked = state.clearDeletesUnseen,
+            enabled = loaded,
+            onChange = { viewModel.onIntent(Intent.ClearDeletesUnseenChanged(it)) },
+        )
         Button(
             onClick = { viewModel.onIntent(Intent.Save) },
             enabled = state.canSave,
@@ -87,6 +111,33 @@ fun ConfigSection(modifier: Modifier = Modifier) {
                 Text(stringResource(R.string.config_save))
             }
         }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onChange: (Boolean) -> Unit,
+    hint: String? = null,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Dimens.ItemSpacing),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (hint != null) {
+                Text(
+                    hint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
 
