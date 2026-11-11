@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.aura.jvm.library)
+    alias(libs.plugins.aura.kover)
     `java-test-fixtures`
 }
 

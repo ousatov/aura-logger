@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.aura.android.library)
     alias(libs.plugins.aura.room)
+    alias(libs.plugins.aura.kover)
 }
 
 android {

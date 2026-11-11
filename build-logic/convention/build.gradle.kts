@@ -10,4 +10,5 @@ dependencies {
     implementation(libs.ksp.gradlePlugin)
     implementation(libs.hilt.gradlePlugin)
     implementation(libs.room3.gradlePlugin)
+    implementation(libs.kover.gradlePlugin)
 }
