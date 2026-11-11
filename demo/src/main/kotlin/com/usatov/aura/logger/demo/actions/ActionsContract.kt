@@ -42,8 +42,11 @@ object ActionsContract {
         /** Shown after a track action; [count] events were tracked. */
         data class Tracked(val count: Int) : Effect
 
-        /** Shown after clearing; unseen events may be kept by the SDK, so [deleted] can be less than the total. */
-        data class Cleared(val deleted: Int) : Effect
+        /**
+         * Shown after clearing; unseen events may be kept by the SDK, so [deleted] can be less than the total.
+         * [kept] is the number of events left after clearing, or `null` if it could not be read.
+         */
+        data class Cleared(val deleted: Int, val kept: Int?) : Effect
 
         /** Clearing failed. */
         data object ClearFailed : Effect

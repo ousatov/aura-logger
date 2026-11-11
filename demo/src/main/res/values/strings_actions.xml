@@ -6,7 +6,7 @@
     <string name="actions_track_with_properties">Track with Properties</string>
     <string name="actions_clear_all">Clear All Events</string>
     <string name="actions_clear_dialog_title">Clear all events?</string>
-    <string name="actions_clear_dialog_message">All stored events will be deleted. Unseen events may be kept depending on the configuration.</string>
+    <string name="actions_clear_dialog_message">Seen events will be deleted. Unseen events are kept: open them in Events to make them clearable.</string>
     <string name="actions_clear_confirm">Clear</string>
     <string name="actions_clear_cancel">Cancel</string>
     <plurals name="actions_tracked">
@@ -16,6 +16,10 @@
     <plurals name="actions_cleared">
         <item quantity="one">Deleted %d event</item>
         <item quantity="other">Deleted %d events</item>
+    </plurals>
+    <plurals name="actions_cleared_kept">
+        <item quantity="one">%d unseen event is kept: open it in Events to make it clearable.</item>
+        <item quantity="other">%d unseen events are kept: open them in Events to make them clearable.</item>
     </plurals>
     <string name="actions_clear_failed">Failed to clear events</string>
 </resources>

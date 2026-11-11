@@ -48,7 +48,7 @@ class ActionsViewModel @Inject constructor(
             try {
                 val deleted = tracker.clearAll()
                 appEvents.eventsCleared(deleted)
-                sendEffect(Effect.Cleared(deleted))
+                sendEffect(Effect.Cleared(deleted, readKept()))
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
@@ -57,5 +57,14 @@ class ActionsViewModel @Inject constructor(
                 setState { copy(isClearing = false) }
             }
         }
+    }
+
+    /** Events left after clearing; `null` if the stats cannot be read, so the clear itself still succeeds. */
+    private suspend fun readKept(): Int? = try {
+        tracker.getStats().totalCount
+    } catch (e: CancellationException) {
+        throw e
+    } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+        null
     }
 }
