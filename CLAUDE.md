@@ -77,7 +77,10 @@ demo/          Android application: Compose + MVI + Hilt
 - One-off effects through a `Channel`/`SharedFlow`, state through `StateFlow`, collected with `collectAsStateWithLifecycle`.
 - Stats refresh every 3 s only while the UI is visible.
 - SDK is initialised in `Application.onCreate` with the persisted demo config.
-- Navigation and screen layout are decided at the UI step.
+- Layout: bottom navigation with Dashboard (statistics + test actions), Events (paged list) and Settings (config + debug tools). Switching tabs is tracked as `section_selected`.
+- Packages under `com.usatov.aura.logger.demo`: `core` (MVI base, DI, time, shared UI), `main` (app shell), and one package per feature: `catalog` + `startup` (D1), `stats` (D2), `events` (D3), `actions` (D4), `config` (D5), `debug` in the `debug` source set (D6).
+- Feature tickets change only their own package and their own `res/values/strings_<feature>.xml`. The app shell (`main`, `core`, DI modules, manifest, Gradle files) is not changed by feature tickets; if a ticket needs a change there, it says so in its PR instead of making it.
+- Contracts (`*Contract`, interfaces, constructor signatures) and their KDoc are the specification of each ticket; do not change them in a feature ticket.
 
 ## 7. Testing
 
@@ -114,10 +117,9 @@ demo/          Android application: Compose + MVI + Hilt
 | 2 | SDK public API + KDoc + compiling stubs (`TODO()`), API dump. **User reviews KDoc before merge** | `feature/sdk-api` |
 | 3 | SDK unit tests (red). **Kept local, not pushed** until step 9 | `feature/sdk-unit-tests` |
 | 4 | SDK implementation — **separate session, see §11** | `feature/sdk-impl` |
-| 5 | Demo: module, Hilt, MVI contract + skeleton, event catalog | `feature/demo-skeleton` |
-| 6 | Demo UI (Compose) | `feature/demo-ui` |
-| 7 | Wire UI → SDK via MVI: paging, seen tracking, config, debug time shift | `feature/demo-wiring` |
-| 8 | Demo unit tests | `feature/demo-tests` |
+| 5 | Demo skeleton: Hilt, MVI base, app shell, contracts and stubs of every feature (D0) | `feature/demo-skeleton` |
+| 6–7 | Demo features as GitHub issues D1–D6, each in its own session, worktree, branch and PR, in waves (D1, D2, D4) → (D3, D5) → D6 | `feature/demo-<ticket>` |
+| 8 | Demo unit tests, written independently of the feature sessions and kept local until reconciliation | separate local clone |
 | 9 | Reconciliation: push tests, merge with implementation, run, triage every failure (impl bug / test bug / spec gap) | `feature/sdk-reconcile` |
 | 10 | Release hardening: signed release APK, README (decisions, KMP path, TODO), `AI_COMMUNICATION.md` | `release/1.0.0` |
 | 11 | Merge to `main`, tag `v1.0.0` | `main` |
@@ -135,6 +137,16 @@ If you are the implementation session:
 - Do not change public API or KDoc. If the spec is ambiguous or contradictory, choose the most reasonable reading, implement it, and record it in `docs/impl-notes.md` (question, chosen reading, where in code).
 - Record your AI usage for `AI_COMMUNICATION.md` in `docs/ai-notes/impl-session.md`: tools/versions, key prompts, what worked, what was wrong and how it was fixed, time spent.
 - Push `feature/sdk-impl` and open a PR into `develop`. Do not merge it.
+
+## 11a. Demo feature ticket sessions (steps 6–7)
+
+If you are a feature ticket session:
+- Requirements = your GitHub issue + the contracts and KDoc it lists + the public SDK API (`EventTracker` and its models) + this file. Read only the files listed in the issue; do not explore the rest of the repository, the SDK internals or other branches.
+- Do not look for, read or write unit tests.
+- Keep to your package and strings file (§6). Do not change contracts or KDoc; record ambiguities in your PR description.
+- Verify once at the end with the command given in the issue; do not run the full build after every change.
+- Write your AI notes to `docs/ai-notes/<ticket>.md` using `docs/ai-notes/TEMPLATE.md` (about 40 lines).
+- Push your branch and open a PR into `develop`. Do not merge.
 
 ## 12. AI_COMMUNICATION.md
 
