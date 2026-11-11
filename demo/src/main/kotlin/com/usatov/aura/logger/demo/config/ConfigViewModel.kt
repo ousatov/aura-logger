@@ -96,50 +96,48 @@ class ConfigViewModel @Inject constructor(
         val retention = snapshot.retentionInput.trim().toIntOrNull() ?: return
         val maxEvents = snapshot.maxEventsInput.trim().toIntOrNull() ?: return
         setState { copy(isSaving = true) }
-        val previous = snapshot.savedConfig
         viewModelScope.launch {
-            // Same lock as persistSwitches(): a switch save must not build on a stale savedConfig
-            // and overwrite values saved here.
-            saveMutex.withLock { saveLocked(previous, retention, maxEvents) }
+            // Same lock as persistSwitches(), and the saved config is read inside it: a switch save
+            // and a Save must not build on each other's stale config.
+            saveMutex.withLock { saveLocked(retention, maxEvents) }
         }
     }
 
-    private suspend fun saveLocked(previous: EventTrackerConfig?, retention: Int, maxEvents: Int) {
-        run {
-            val config = EventTrackerConfig(
-                retentionDays = retention,
-                maxEvents = maxEvents,
-                unseenEventsProtection = previous?.unseenEventsProtection ?: UnseenEventsProtection(),
-            )
+    private suspend fun saveLocked(retention: Int, maxEvents: Int) {
+        val previous = currentState.savedConfig
+        val config = EventTrackerConfig(
+            retentionDays = retention,
+            maxEvents = maxEvents,
+            unseenEventsProtection = previous?.unseenEventsProtection ?: UnseenEventsProtection(),
+        )
+        try {
+            repository.save(config)
             try {
-                repository.save(config)
-                try {
-                    tracker.updateConfig(config)
-                } catch (e: CancellationException) {
-                    // The SDK write is queued and still completes after the caller is cancelled,
-                    // so the stored config (already the new one) must not be rolled back.
-                    throw e
-                } catch (e: Exception) {
-                    // Keep the stored config and the SDK config consistent: undo the write so
-                    // that the inputs differ from the saved config again and Save can be retried.
-                    if (previous != null) rollback(previous)
-                    throw e
-                }
-                try {
-                    appEvents.configChanged(config)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // The config is stored and applied; a failed analytics event is not a save failure.
-                }
-                setState { copy(isSaving = false, savedConfig = config) }
-                sendEffect(Effect.Saved)
+                tracker.updateConfig(config)
+            } catch (e: CancellationException) {
+                // The SDK write is queued and still completes after the caller is cancelled,
+                // so the stored config (already the new one) must not be rolled back.
+                throw e
+            } catch (e: Exception) {
+                // Keep the stored config and the SDK config consistent: undo the write so
+                // that the inputs differ from the saved config again and Save can be retried.
+                if (previous != null) rollback(previous)
+                throw e
+            }
+            try {
+                appEvents.configChanged(config)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                setState { copy(isSaving = false) }
-                sendEffect(Effect.SaveFailed)
+                // The config is stored and applied; a failed analytics event is not a save failure.
             }
+            setState { copy(isSaving = false, savedConfig = config) }
+            sendEffect(Effect.Saved)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            setState { copy(isSaving = false) }
+            sendEffect(Effect.SaveFailed)
         }
     }
 
