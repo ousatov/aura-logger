@@ -125,6 +125,15 @@ class DataStoreConfigStoreTest {
     }
 
     @Test
+    fun `corrupted file without a corruption handler is read as missing config`() = runBlocking {
+        file().writeBytes("garbage".toByteArray())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
+        val withoutHandler = PreferenceDataStoreFactory.create(scope = scope, produceFile = ::file)
+
+        assertNull(DataStoreConfigStore(withoutHandler).read())
+    }
+
+    @Test
     fun `write after a corrupted file succeeds`() = runBlocking {
         file().writeBytes("garbage".toByteArray())
         val store = DataStoreConfigStore(newDataStore())
