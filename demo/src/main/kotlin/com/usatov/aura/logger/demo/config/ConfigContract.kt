@@ -58,7 +58,8 @@ object ConfigContract {
          * Saves the inputs: persists them with [DemoConfigRepository.save], applies them with
          * `EventTracker.updateConfig` and tracks `AppEvents.configChanged`, in this order. Ignored
          * when [State.canSave] is false. The unseen-events protection is the stored one; pending
-         * switch changes are not part of Save.
+         * switch changes are not part of Save. The UI has no Save button: this is also done by
+         * [ScreenHidden].
          */
         data object Save : Intent
 
@@ -66,8 +67,9 @@ object ConfigContract {
         data class ClearDeletesUnseenChanged(val enabled: Boolean) : Intent
 
         /**
-         * The Settings tab was left or the app went to the background: persists the changed
-         * switches (the "track navigation" flag with [DemoConfigRepository.saveTrackNavigation],
+         * The Settings tab was left or the app went to the background. First the inputs: valid
+         * changed inputs are saved as by [Save]; invalid inputs are discarded and reset to the stored
+         * values. Then persists the changed switches (the "track navigation" flag with [DemoConfigRepository.saveTrackNavigation],
          * the unseen flag with [DemoConfigRepository.save] followed by `EventTracker.updateConfig`
          * with the stored retention and max events). Does nothing when no switch changed. A failed
          * save restores the switch and sends [Effect.SaveFailed].
