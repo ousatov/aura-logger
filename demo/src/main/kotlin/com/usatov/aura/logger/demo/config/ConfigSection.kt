@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -26,6 +27,7 @@ import com.usatov.aura.logger.demo.R
 import com.usatov.aura.logger.demo.config.ConfigContract.Effect
 import com.usatov.aura.logger.demo.config.ConfigContract.InputError
 import com.usatov.aura.logger.demo.config.ConfigContract.Intent
+import com.usatov.aura.logger.demo.core.ui.Dimens
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
 
 /** Settings: retention period and max events fields with validation and a Save button. */
@@ -48,7 +50,10 @@ fun ConfigSection(modifier: Modifier = Modifier) {
     }
 
     val loaded = state.savedConfig != null
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = Dimens.ScreenHorizontal),
+        verticalArrangement = Arrangement.spacedBy(Dimens.ItemSpacing),
+    ) {
         Text(stringResource(R.string.config_title), style = MaterialTheme.typography.titleMedium)
         NumberField(
             label = stringResource(R.string.config_retention_label),
@@ -72,7 +77,7 @@ fun ConfigSection(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.ItemSpacing),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (state.isSaving) {
