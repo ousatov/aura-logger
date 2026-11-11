@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import com.usatov.aura.logger.demo.config.ConfigContract.InputError
 import com.usatov.aura.logger.demo.config.ConfigContract.Intent
 import com.usatov.aura.logger.demo.core.ui.Dimens
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
+import com.usatov.aura.logger.demo.core.ui.showLatest
 
 /** Settings: retention period and max events fields with validation and a Save button. */
 @Composable
@@ -39,13 +41,12 @@ fun ConfigSection(modifier: Modifier = Modifier) {
     val resources = LocalResources.current
 
     LaunchedEffect(viewModel, snackbarHostState) {
-        viewModel.effects.collect { effect ->
+        viewModel.effects.collectLatest { effect ->
             val message = when (effect) {
                 Effect.Saved -> resources.getString(R.string.config_saved)
                 Effect.SaveFailed -> resources.getString(R.string.config_save_failed)
             }
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showLatest(message)
         }
     }
 
