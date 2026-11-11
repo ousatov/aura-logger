@@ -1,7 +1,8 @@
 # TODO
 
 Open items of the Aura Logger SDK and demo, with the reason for each. Detailed implementation
-decisions are in [`docs/impl-notes.md`](docs/impl-notes.md).
+decisions are in [`docs/impl-notes.md`](docs/impl-notes.md). Everything required by the assignment is
+implemented; the items below are known limitations, verifications not yet done on a device, and next steps.
 
 ## 1. Planned: multi-process support
 
@@ -54,6 +55,12 @@ runtime with the release build of the demo before the release.
    store only. Check against Room if it is ever enabled.
 5. **WorkManager schedule:** the periodic cleanup is enqueued once (24 h, first run after 1 h) and
    is not duplicated by repeated app starts.
+6. **Events tab on a real device:** smooth fast scrolling (#33, measured in the release build), rows switch to
+   "seen" right after they are displayed (#32), every row passed during a fling is marked seen (#24).
+7. **Settings switches:** "Track navigation events" and "Clear All also deletes unseen events" are saved when
+   leaving the Settings tab and survive a process restart.
+8. **Debug time shift:** shifting by days changes "today", the day headers and the statistics; a cleanup after a
+   shift of more than the retention period deletes old seen events.
 
 ## 3. Known limitations
 
@@ -89,3 +96,27 @@ runtime with the release build of the demo before the release.
   regular builds are not affected.
 - **Coverage gaps:** a few write-queue branches depend on thread interleaving and one branch is
   compiler-generated; they are not deterministically testable.
+
+## 5. Demo app
+
+- **No UI tests:** the demo has 112 unit tests (ViewModels, paging, formatting, storage) but no Compose UI,
+  instrumented or screenshot tests; UI behaviour (scrolling, seen reporting from the visible rows, snackbars) was
+  checked manually only.
+- **No coverage report for the demo:** Kover is configured for the SDK modules only.
+- **App icon:** the demo uses the default launcher icon.
+- **Seen reporting is time based:** a row counts as seen as soon as it is laid out on screen; there is no minimum
+  visible time or visible fraction.
+- **Custom events from the UI:** discussed and deliberately not implemented; the catalog of app events is fixed in
+  code (`AppEvents`).
+- **Limit protection switch:** Settings exposes only the Clear All protection; retention and limit protection stay
+  on, as the assignment requires.
+
+## 6. Engineering process
+
+- **No CI:** builds, lint and tests run locally; a GitHub Actions workflow (`./gradlew check assembleRelease`) is the
+  next step. The per-commit AI review hook is local and not part of the repository.
+- **Release signing is local:** the keystore lives outside the repository; `keystore.properties` (or `AURA_*`
+  environment variables) is needed to build a signed release.
+- **Process deviation:** two demo unit tests were written by feature ticket sessions with the user's approval
+  (`ConfigViewModelSaveTest`, `EventsViewModelSessionTest`), although the ticket rules leave tests to the
+  independent test session.
