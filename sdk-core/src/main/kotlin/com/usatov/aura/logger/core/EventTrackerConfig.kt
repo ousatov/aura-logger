@@ -3,9 +3,11 @@ package com.usatov.aura.logger.core
 /**
  * Data retention policy of the event tracker.
  *
- * The policy is applied by the background cleanup (see [EventTracker.updateConfig] and the
- * SDK initialisation), never synchronously while tracking. Between two cleanup runs the number
- * of stored events can therefore exceed [maxEvents].
+ * The retention period is applied by the background cleanup (see [EventTracker.updateConfig] and
+ * the SDK initialisation). The [maxEvents] limit is applied by the cleanup and also right after
+ * every write on the background write queue, so the number of stored events exceeds [maxEvents]
+ * only while unseen events protected by [UnseenEventsProtection.onLimit] prevent deletion.
+ * New events are never rejected because of the limit.
  *
  * Instances are immutable and safe to share between threads.
  *
@@ -13,8 +15,10 @@ package com.usatov.aura.logger.core
  * A cleanup deletes every event created before the start of the day that is [retentionDays]
  * days before the current day (device time zone at cleanup time). Example: with `7`, a cleanup
  * running on 15/03 keeps events created on 08/03 or later. Default: [DEFAULT_RETENTION_DAYS].
- * @property maxEvents maximum number of events to keep. A cleanup deletes the oldest events above
- * this number. Default: [DEFAULT_MAX_EVENTS].
+ * @property maxEvents maximum number of events to keep. When there are more, the oldest events
+ * are deleted until at most [maxEvents] remain; with [UnseenEventsProtection.onLimit], only seen
+ * events are deleted (oldest first), and if only unseen events are left above the limit, they are
+ * all kept. Default: [DEFAULT_MAX_EVENTS].
  * @property unseenEventsProtection which cleanup operations must keep events that the user has
  * never seen. Because protected events are never deleted, [maxEvents] is a soft limit while
  * unseen events exist.
@@ -52,7 +56,10 @@ public data class EventTrackerConfig(
  *
  * @property onRetention protects unseen events from deletion by the retention period.
  * @property onLimit protects unseen events from deletion by the [EventTrackerConfig.maxEvents] limit.
- * Unseen events still count towards the limit, so older seen events are deleted first.
+ * Unseen events still count towards the limit. Seen events are deleted oldest first, wherever they
+ * are in the list (also when they are newer than the unseen ones), until at most `maxEvents`
+ * events remain or no seen event is left. Example: 10 events, seen are the 1st, 3rd, 5th, 7th and
+ * 9th oldest, `maxEvents = 6`: the 1st, 3rd, 5th and 7th are deleted.
  * @property onClearAll protects unseen events from [EventTracker.clearAll].
  */
 public data class UnseenEventsProtection(

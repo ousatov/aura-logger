@@ -17,7 +17,8 @@ import kotlin.time.Clock
  *    [timeZoneProvider] at run time). Unseen events are kept if
  *    `unseenEventsProtection.onRetention` is set.
  * 2. Limit: deletes the oldest remaining events so that at most [EventTrackerConfig.maxEvents]
- *    remain. Unseen events are kept, but still counted, if `unseenEventsProtection.onLimit` is set.
+ *    remain. If `unseenEventsProtection.onLimit` is set, unseen events are kept but counted, and
+ *    seen events are deleted oldest first until the limit is reached or no seen event is left.
  *
  * Storage errors are propagated to the caller (the worker decides whether to retry).
  */
