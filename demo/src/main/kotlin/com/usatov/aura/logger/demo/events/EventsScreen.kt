@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Badge
@@ -136,15 +137,22 @@ private fun EventsList(items: LazyPagingItems<EventListItem>, listState: LazyLis
             state = listState,
             contentPadding = PaddingValues(bottom = 8.dp),
         ) {
-            for (index in 0 until items.itemCount) {
-                when (val entry = items.peek(index)) {
-                    is EventListItem.DayHeader -> stickyHeader(key = headerKey(items, index, entry), contentType = "header") {
-                        items[index]
+            var index = 0
+            while (index < items.itemCount) {
+                val entry = items.peek(index)
+                if (entry is EventListItem.DayHeader) {
+                    val headerIndex = index
+                    stickyHeader(key = headerKey(items, headerIndex, entry), contentType = HEADER_CONTENT_TYPE) {
+                        items[headerIndex]
                         DayHeaderRow(entry.label)
                     }
-                    else -> item(key = (entry as? EventListItem.Event)?.item?.id?.let(::eventKey) ?: "pending_$index", contentType = "event") {
-                        (items[index] as? EventListItem.Event)?.let { EventRow(it.item) }
-                    }
+                    index++
+                } else {
+                    // One block per run of rows between headers: keys and rows are produced lazily,
+                    // only for the rows the list actually lays out.
+                    val start = index
+                    while (index < items.itemCount && items.peek(index) !is EventListItem.DayHeader) index++
+                    eventRows(items, start, index - start)
                 }
             }
             when (items.loadState.append) {
@@ -161,6 +169,20 @@ private fun EventsList(items: LazyPagingItems<EventListItem>, listState: LazyLis
                 is LoadState.NotLoading -> Unit
             }
         }
+    }
+}
+
+private const val HEADER_CONTENT_TYPE = "header"
+private const val EVENT_CONTENT_TYPE = "event"
+
+/** Rows `start until start + count` of [items], none of which is a header. */
+private fun LazyListScope.eventRows(items: LazyPagingItems<EventListItem>, start: Int, count: Int) {
+    items(
+        count = count,
+        key = { offset -> (items.peek(start + offset) as? EventListItem.Event)?.item?.id?.let(::eventKey) ?: "pending_${start + offset}" },
+        contentType = { EVENT_CONTENT_TYPE },
+    ) { offset ->
+        (items[start + offset] as? EventListItem.Event)?.let { EventRow(it.item) }
     }
 }
 

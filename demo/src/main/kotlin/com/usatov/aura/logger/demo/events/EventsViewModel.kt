@@ -22,7 +22,10 @@ import com.usatov.aura.logger.demo.events.EventsContract.State
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -36,7 +39,8 @@ import kotlin.time.Clock
  * emission so that new and deleted events appear. A [EventListItem.DayHeader] is inserted before
  * the first event and wherever the day changes between two neighbours; "today" is taken from
  * [clock] in the [zoneProvider] zone each time a page set is emitted. See
- * [EventsContract.Intent.ItemsShown] for seen tracking.
+ * [EventsContract.Intent.ItemsShown] for seen tracking. Rows reported with `markSeen` are shown as
+ * seen at once, without reloading the list.
  */
 @HiltViewModel
 class EventsViewModel @Inject constructor(
@@ -48,6 +52,12 @@ class EventsViewModel @Inject constructor(
 
     /** Ids that need no `markSeen`: already reported by this ViewModel or loaded as seen. */
     private val skipIds: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /**
+     * Ids reported with `markSeen` by this ViewModel. Overlaid on the loaded rows, because a
+     * `markSeen` alone does not reload the list (see `init`).
+     */
+    private val reportedSeen = MutableStateFlow<Set<String>>(emptySet())
 
     @Volatile
     private var currentSource: PagingSource<EventCursor, EventItem>? = null
@@ -64,8 +74,9 @@ class EventsViewModel @Inject constructor(
             .map(::withDayHeaders)
             .cachedIn(viewModelScope)
 
-    val events: Flow<PagingData<EventListItem>>
-        get() = pagedEvents
+    val events: Flow<PagingData<EventListItem>> = combine(pagedEvents, reportedSeen) { data, seen ->
+        if (seen.isEmpty()) data else data.map { entry -> entry.markedSeenIfIn(seen) }
+    }
 
     init {
         viewModelScope.launch {
@@ -87,8 +98,13 @@ class EventsViewModel @Inject constructor(
 
     private fun reportShown(ids: List<String>) {
         val newIds = ids.distinct().filter { skipIds.add(it) }
-        if (newIds.isNotEmpty()) tracker.markSeen(newIds)
+        if (newIds.isEmpty()) return
+        tracker.markSeen(newIds)
+        reportedSeen.update { it + newIds }
     }
+
+    private fun EventListItem.markedSeenIfIn(seen: Set<String>): EventListItem =
+        if (this is EventListItem.Event && !item.seen && item.id in seen) EventListItem.Event(item.copy(seen = true)) else this
 
     private fun withDayHeaders(data: PagingData<EventItem>): PagingData<EventListItem> {
         val today = Instant.ofEpochMilli(clock.now().toEpochMilliseconds()).atZone(zoneProvider.zone()).toLocalDate()
