@@ -51,6 +51,13 @@ public interface EventTracker {
      *
      * If writing to the database fails, the event is lost and an error is logged.
      *
+     * After the event is written, the [EventTrackerConfig.maxEvents] limit is applied on the same
+     * queue (see [EventTrackerConfig]). With [UnseenEventsProtection.onLimit] (the default), the
+     * new event is unseen, so the limit never deletes it. With `onLimit = false`, the limit keeps
+     * the newest `maxEvents` events, so the new event is deleted right after it is written if at
+     * least `maxEvents` stored events are newer than it (for example, an event tracked before
+     * initialisation and written on initialisation).
+     *
      * Events that are still queued when the process dies are lost.
      *
      * @param name event name, for example `"button_clicked"`. Must not be blank.

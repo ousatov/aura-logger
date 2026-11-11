@@ -2,10 +2,19 @@ package com.usatov.aura.logger.internal.cleanup
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.usatov.aura.logger.core.AuraLoggerSettings
+import com.usatov.aura.logger.core.EventTrackerConfig
+import com.usatov.aura.logger.core.engine.EventCleaner
 import com.usatov.aura.logger.core.spi.CleanupScheduler
+import com.usatov.aura.logger.internal.AuraLoggerRuntime
+import kotlinx.coroutines.CancellationException
+import java.util.concurrent.TimeUnit
 
 /**
  * [CleanupScheduler] backed by WorkManager unique work; both runs use [CleanupWorker].
@@ -19,9 +28,17 @@ internal class WorkManagerCleanupScheduler(
     private val settings: AuraLoggerSettings,
 ) : CleanupScheduler {
 
-    override fun schedulePeriodic(): Unit = TODO("Not implemented yet")
+    override fun schedulePeriodic() {
+        val request = PeriodicWorkRequestBuilder<CleanupWorker>(settings.cleanupPeriodHours, TimeUnit.HOURS)
+            .setInitialDelay(settings.cleanupInitialDelayHours, TimeUnit.HOURS)
+            .build()
+        workManager.enqueueUniquePeriodicWork(settings.periodicCleanupWorkName, ExistingPeriodicWorkPolicy.KEEP, request)
+    }
 
-    override fun scheduleOneTime(): Unit = TODO("Not implemented yet")
+    override fun scheduleOneTime() {
+        val request = OneTimeWorkRequestBuilder<CleanupWorker>().build()
+        workManager.enqueueUniqueWork(settings.oneTimeCleanupWorkName, ExistingWorkPolicy.REPLACE, request)
+    }
 }
 
 /**
@@ -40,5 +57,23 @@ internal class CleanupWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = TODO("Not implemented yet")
+    override suspend fun doWork(): Result {
+        val runtime = AuraLoggerRuntime
+        return try {
+            val config = runtime.configStore(applicationContext).read() ?: EventTrackerConfig()
+            val cleaner = EventCleaner(
+                eventStore = runtime.eventStore(applicationContext),
+                clock = runtime.clock,
+                timeZoneProvider = runtime.timeZoneProvider,
+                logger = runtime.logger,
+            )
+            cleaner.cleanup(config)
+            Result.success()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            runtime.logger.error("Event cleanup failed; it will be retried", e)
+            Result.retry()
+        }
+    }
 }

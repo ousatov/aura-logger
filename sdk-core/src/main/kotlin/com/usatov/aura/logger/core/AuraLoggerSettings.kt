@@ -25,6 +25,17 @@ package com.usatov.aura.logger.core
  * @property periodicCleanupWorkName unique name of the periodic cleanup work.
  * @property oneTimeCleanupWorkName unique name of the one-time cleanup work scheduled by
  * [EventTracker.updateConfig].
+ * @property enforceLimitOnWrite `true` (default): the [EventTrackerConfig.maxEvents] limit is
+ * applied right after every write on the background write queue and by the cleanup; `false`: only
+ * by the cleanup, so the number of events can exceed the limit until the next cleanup run.
+ * @property limitOverflowStrategy what happens to new events when the limit is reached and no
+ * event can be deleted to make room; applies only when [enforceLimitOnWrite] is `true`. Default:
+ * [LimitOverflowStrategy.KEEP_NEW_EVENTS]. See [LimitOverflowStrategy].
+ *
+ * The limit behaviour stated in [EventTracker.track] and [EventTrackerConfig] describes the
+ * default values of [enforceLimitOnWrite] and [limitOverflowStrategy]. With
+ * [LimitOverflowStrategy.DROP_NEW_EVENTS], new events are dropped when only unseen events are left
+ * above the limit.
  */
 @InternalAuraLoggerApi
 public data class AuraLoggerSettings(
@@ -39,6 +50,8 @@ public data class AuraLoggerSettings(
     val configFileName: String = "aura_logger_config",
     val periodicCleanupWorkName: String = "aura_logger_periodic_cleanup",
     val oneTimeCleanupWorkName: String = "aura_logger_one_time_cleanup",
+    val enforceLimitOnWrite: Boolean = true,
+    val limitOverflowStrategy: LimitOverflowStrategy = LimitOverflowStrategy.KEEP_NEW_EVENTS,
 ) {
     init {
         require(preInitBufferCapacity > 0) { "preInitBufferCapacity must be positive" }
@@ -49,4 +62,22 @@ public data class AuraLoggerSettings(
         require(cleanupPeriodHours > 0) { "cleanupPeriodHours must be positive" }
         require(cleanupInitialDelayHours >= 0) { "cleanupInitialDelayHours must not be negative" }
     }
+}
+
+/**
+ * Behaviour when a write would exceed [EventTrackerConfig.maxEvents] and no stored event can be
+ * deleted to make room (all are protected by [UnseenEventsProtection.onLimit]).
+ * Applies only when [AuraLoggerSettings.enforceLimitOnWrite] is `true`.
+ */
+@InternalAuraLoggerApi
+public enum class LimitOverflowStrategy {
+    /** Store the new events anyway; the limit is exceeded until events are seen. No data loss. Default. */
+    KEEP_NEW_EVENTS,
+
+    /**
+     * Drop the new events that do not fit, with a warning. Events are considered in call order: an
+     * event is stored if it fits, otherwise the oldest seen event is deleted to make room, and only
+     * if no seen event is left is the new event dropped. Earlier calls therefore win over later ones.
+     */
+    DROP_NEW_EVENTS,
 }

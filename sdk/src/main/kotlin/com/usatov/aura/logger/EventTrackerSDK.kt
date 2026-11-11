@@ -8,6 +8,9 @@ import com.usatov.aura.logger.core.EventTracker
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.TrackedEvent
+import com.usatov.aura.logger.core.engine.EngineDependencies
+import com.usatov.aura.logger.internal.AuraLoggerRuntime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlin.time.Clock
 
@@ -34,9 +37,13 @@ import kotlin.time.Clock
  */
 public object EventTrackerSDK : EventTracker {
 
+    private val runtime = AuraLoggerRuntime
+    private val engine = runtime.engine
+    private val initLock = Any()
+
     /** `true` once [init] has been called in this process. Thread-safe. */
     public val isInitialized: Boolean
-        get() = TODO("Not implemented yet")
+        get() = engine.isStarted
 
     /**
      * Initialises the tracker. Call it once per process, as early as possible, typically in
@@ -67,26 +74,50 @@ public object EventTrackerSDK : EventTracker {
         context: Context,
         config: EventTrackerConfig = EventTrackerConfig(),
         clock: Clock = Clock.System,
-    ): Unit = TODO("Not implemented yet")
+    ) {
+        try {
+            synchronized(initLock) {
+                if (engine.isStarted) {
+                    runtime.logger.warn("EventTrackerSDK.init was already called; this call is ignored. Use updateConfig to change the config.")
+                    return
+                }
+                val appContext = context.applicationContext ?: context
+                runtime.clock = clock
+                engine.start(
+                    EngineDependencies(
+                        config = config,
+                        eventStore = runtime.eventStore(appContext),
+                        configStore = runtime.configStore(appContext),
+                        cleanupScheduler = runtime.cleanupScheduler(appContext),
+                        clock = clock,
+                        scope = runtime.scope,
+                        readDispatcher = Dispatchers.IO,
+                    ),
+                )
+            }
+        } catch (e: Throwable) {
+            runtime.logger.error("EventTrackerSDK.init failed", e)
+        }
+    }
 
-    override fun track(name: String, properties: Map<String, String>): Unit = TODO("Not implemented yet")
+    override fun track(name: String, properties: Map<String, String>): Unit = engine.track(name, properties)
 
     override fun <T> track(name: String, properties: T, codec: PropertiesCodec<T>): Unit =
-        TODO("Not implemented yet")
+        engine.track(name, properties, codec)
 
-    override fun markSeen(eventIds: Collection<String>): Unit = TODO("Not implemented yet")
+    override fun markSeen(eventIds: Collection<String>): Unit = engine.markSeen(eventIds)
 
-    override suspend fun getRecentEvents(limit: Int): List<TrackedEvent> = TODO("Not implemented yet")
+    override suspend fun getRecentEvents(limit: Int): List<TrackedEvent> = engine.getRecentEvents(limit)
 
     override suspend fun getEventsPage(cursor: EventCursor?, pageSize: Int): EventPage =
-        TODO("Not implemented yet")
+        engine.getEventsPage(cursor, pageSize)
 
-    override suspend fun getStats(): EventStats = TODO("Not implemented yet")
+    override suspend fun getStats(): EventStats = engine.getStats()
 
-    override suspend fun clearAll(): Int = TODO("Not implemented yet")
+    override suspend fun clearAll(): Int = engine.clearAll()
 
-    override suspend fun updateConfig(config: EventTrackerConfig): Unit = TODO("Not implemented yet")
+    override suspend fun updateConfig(config: EventTrackerConfig): Unit = engine.updateConfig(config)
 
     override val changes: Flow<Unit>
-        get() = TODO("Not implemented yet")
+        get() = engine.changes
 }
