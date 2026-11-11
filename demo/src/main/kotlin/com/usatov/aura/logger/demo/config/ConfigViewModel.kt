@@ -108,6 +108,10 @@ class ConfigViewModel @Inject constructor(
                 repository.save(config)
                 try {
                     tracker.updateConfig(config)
+                } catch (e: CancellationException) {
+                    // The SDK write is queued and still completes after the caller is cancelled,
+                    // so the stored config (already the new one) must not be rolled back.
+                    throw e
                 } catch (e: Exception) {
                     // Keep the stored config and the SDK config consistent: undo the write so
                     // that the inputs differ from the saved config again and Save can be retried.
@@ -158,6 +162,8 @@ class ConfigViewModel @Inject constructor(
                     repository.save(config)
                     try {
                         tracker.updateConfig(config)
+                    } catch (e: CancellationException) {
+                        throw e // see save(): the queued SDK write still completes
                     } catch (e: Exception) {
                         rollback(saved)
                         throw e
