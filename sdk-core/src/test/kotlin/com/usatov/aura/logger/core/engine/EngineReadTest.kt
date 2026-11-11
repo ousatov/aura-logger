@@ -4,7 +4,7 @@ import com.usatov.aura.logger.core.EventCursor
 import com.usatov.aura.logger.core.TrackedEvent
 import com.usatov.aura.logger.core.testing.millisOf
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -21,7 +21,7 @@ class EngineReadTest {
     private suspend fun TestScope.started(zone: String = "UTC"): EngineHarness =
         EngineHarness(this, zone = zone).also {
             it.start()
-            advanceUntilIdle()
+            runCurrent()
         }
 
     private fun EngineHarness.trackAt(name: String, timestamp: Long, properties: Map<String, String> = emptyMap()) {
@@ -82,7 +82,7 @@ class EngineReadTest {
         fun `returned event maps every stored field`() = runTest {
             val h = started()
             h.trackAt("e", T0, mapOf("a" to "1"))
-            advanceUntilIdle()
+            runCurrent()
             val id = h.store.all.single().id
             h.engine.markSeen(listOf(id))
 
@@ -174,7 +174,7 @@ class EngineReadTest {
         fun `cursor stays valid when its anchor event is deleted`() = runTest {
             val h = started()
             (1..4).forEach { h.trackAt("e$it", T0 + it) }
-            advanceUntilIdle()
+            runCurrent()
 
             val p1 = h.engine.getEventsPage(null, 2)
             h.store.all.filter { it.name == "e3" }.forEach { h.engine.markSeen(listOf(it.id)) }

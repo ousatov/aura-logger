@@ -4,7 +4,7 @@ import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.testing.millisOf
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -22,7 +22,7 @@ class EngineTrackingTest {
     private suspend fun TestScope.startedHarness(settings: AuraLoggerSettings = AuraLoggerSettings()): EngineHarness =
         EngineHarness(this, settings).also {
             it.start()
-            advanceUntilIdle()
+            runCurrent()
         }
 
     @Nested
@@ -32,7 +32,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             h.engine.track("button_clicked", mapOf("button_id" to "submit"))
-            advanceUntilIdle()
+            runCurrent()
 
             val stored = h.store.all.single()
             assertEquals("id-1", stored.id)
@@ -49,7 +49,7 @@ class EngineTrackingTest {
 
             h.engine.track("app_opened")
             h.engine.track("app_closed", emptyMap())
-            advanceUntilIdle()
+            runCurrent()
 
             h.store.all.forEach { assertEquals("{}", it.propertiesJson) }
         }
@@ -62,7 +62,7 @@ class EngineTrackingTest {
             h.clock.advanceBy(5_000)
             h.engine.track("second")
             h.clock.advanceBy(60_000)
-            advanceUntilIdle()
+            runCurrent()
 
             val byName = h.store.all.associateBy { it.name }
             assertEquals(T0, byName.getValue("first").timestamp)
@@ -76,7 +76,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             repeat(20) { h.engine.track("e$it") }
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals((0 until 20).map { "e$it" }, h.store.all.sortedBy { it.sequence }.map { it.name })
         }
@@ -89,7 +89,7 @@ class EngineTrackingTest {
 
             h.engine.track("e")
             h.timeZone.zoneId = "UTC"
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals("05/01/2026", h.store.all.single().createdDate)
         }
@@ -102,7 +102,7 @@ class EngineTrackingTest {
             h.engine.track("last_ms_of_year")
             h.clock.nowMillis = millisOf("Europe/Kyiv", 2026, 1, 1)
             h.engine.track("first_ms_of_year")
-            advanceUntilIdle()
+            runCurrent()
 
             val byName = h.store.all.associateBy { it.name }
             assertEquals("31/12/2025", byName.getValue("last_ms_of_year").createdDate)
@@ -115,7 +115,7 @@ class EngineTrackingTest {
             val properties = linkedMapOf("zeta" to "1", "alpha" to "2", "mid" to "3", "beta" to "4")
 
             h.engine.track("ordered", properties)
-            advanceUntilIdle()
+            runCurrent()
 
             val event = h.engine.getRecentEvents(1).single()
             assertEquals(listOf("zeta", "alpha", "mid", "beta"), event.properties.keys.toList())
@@ -137,7 +137,7 @@ class EngineTrackingTest {
             )
 
             h.engine.track("weird \"name\"\n👋", properties)
-            advanceUntilIdle()
+            runCurrent()
 
             val event = h.engine.getRecentEvents(1).single()
             assertEquals("weird \"name\"\n👋", event.name)
@@ -150,7 +150,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             repeat(3) { h.engine.track("same", mapOf("k" to "v")) }
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(3, h.store.all.map { it.id }.toSet().size)
         }
@@ -164,7 +164,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             assertDoesNotThrow { h.engine.track(name) }
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.isEmpty())
             assertTrue(h.logger.warnings.isNotEmpty())
@@ -176,7 +176,7 @@ class EngineTrackingTest {
 
             h.engine.track("a".repeat(128))
             h.engine.track("b".repeat(129))
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("a".repeat(128)), h.store.all.map { it.name })
             assertEquals(1, h.logger.warnings.size)
@@ -188,7 +188,7 @@ class EngineTrackingTest {
 
             h.engine.track("fifty", (1..50).associate { "k$it" to "v" })
             h.engine.track("fifty_one", (1..51).associate { "k$it" to "v" })
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("fifty"), h.store.all.map { it.name })
         }
@@ -201,7 +201,7 @@ class EngineTrackingTest {
             h.engine.track("long_key", mapOf("k".repeat(129) to "v"))
             h.engine.track("empty_key", mapOf("" to "v"))
             h.engine.track("blank_key", mapOf("  " to "v"))
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("ok_key"), h.store.all.map { it.name })
         }
@@ -214,7 +214,7 @@ class EngineTrackingTest {
             h.engine.track("empty_value", mapOf("k" to ""))
             h.engine.track("blank_value", mapOf("k" to "   "))
             h.engine.track("long_value", mapOf("k" to "v".repeat(1025)))
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(setOf("ok_value", "empty_value", "blank_value"), h.store.all.map { it.name }.toSet())
         }
@@ -224,7 +224,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             h.engine.track("mixed", mapOf("good" to "v", "bad" to "x".repeat(2000)))
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.isEmpty())
             assertEquals(1, h.logger.warnings.size)
@@ -241,7 +241,7 @@ class EngineTrackingTest {
             h.engine.track("abc", mapOf("a" to "1", "b" to "2"))
             h.engine.track("abc", mapOf("abc" to "1"))
             h.engine.track("abc", mapOf("a" to "123"))
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(1, h.store.all.size)
         }
@@ -252,7 +252,7 @@ class EngineTrackingTest {
 
             h.engine.track("")
             h.engine.track("valid")
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("valid"), h.store.all.map { it.name })
         }
@@ -269,7 +269,7 @@ class EngineTrackingTest {
             val properties = mapOf("k" to null) as Map<String, String>
 
             assertDoesNotThrow { h.engine.track("nullable_value", properties) }
-            advanceUntilIdle()
+            runCurrent()
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -279,7 +279,7 @@ class EngineTrackingTest {
             val properties = mapOf(null to "v") as Map<String, String>
 
             assertDoesNotThrow { h.engine.track("nullable_key", properties) }
-            advanceUntilIdle()
+            runCurrent()
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -289,7 +289,7 @@ class EngineTrackingTest {
             val ids = listOf("a", null) as Collection<String>
 
             assertDoesNotThrow { h.engine.markSeen(ids) }
-            advanceUntilIdle()
+            runCurrent()
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -299,7 +299,7 @@ class EngineTrackingTest {
             val codec = PropertiesCodec<Unit> { mapOf("k" to null) as Map<String, String> }
 
             assertDoesNotThrow { h.engine.track("codec_null", Unit, codec) }
-            advanceUntilIdle()
+            runCurrent()
         }
     }
 
@@ -312,7 +312,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             h.engine.track("purchase_completed", Purchase("sku-1", 199), codec)
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(mapOf("sku" to "sku-1", "price" to "199"), decode(h.store.all.single().propertiesJson))
         }
@@ -338,7 +338,7 @@ class EngineTrackingTest {
                 h.engine.track("broken", Unit, PropertiesCodec { throw IllegalStateException("boom") })
             }
             h.engine.track("after")
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("after"), h.store.all.map { it.name })
             assertTrue(h.logger.warnings.isNotEmpty())
@@ -356,7 +356,7 @@ class EngineTrackingTest {
             val h = startedHarness()
 
             h.engine.track("e", Unit, PropertiesCodec { mapOf("k" to "v".repeat(1025)) })
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.isEmpty())
         }
@@ -370,9 +370,9 @@ class EngineTrackingTest {
             h.store.failNextInsert = RuntimeException("disk full")
 
             assertDoesNotThrow { h.engine.track("lost") }
-            advanceUntilIdle()
+            runCurrent()
             h.engine.track("kept")
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("kept"), h.store.all.map { it.name })
             assertTrue(h.logger.errors.isNotEmpty())
@@ -384,7 +384,7 @@ class EngineTrackingTest {
             h.store.failAllInserts = RuntimeException("db closed")
 
             assertDoesNotThrow { repeat(50) { h.engine.track("e$it") } }
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.isEmpty())
             assertTrue(h.logger.errors.isNotEmpty())

@@ -2,7 +2,7 @@ package com.usatov.aura.logger.core.engine
 
 import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.PropertiesCodec
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,11 +18,11 @@ class EnginePreInitTest {
         h.engine.track("a")
         h.engine.track("b", mapOf("k" to "v"))
         h.engine.track("c", Unit, PropertiesCodec { mapOf("typed" to "yes") })
-        advanceUntilIdle()
+        runCurrent()
         assertTrue(h.store.all.isEmpty())
 
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("a", "b", "c"), h.store.all.sortedBy { it.sequence }.map { it.name })
     }
@@ -36,7 +36,7 @@ class EnginePreInitTest {
         h.clock.advanceBy(86_400_000L * 3)
         h.timeZone.zoneId = "Pacific/Kiritimati"
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         val stored = h.store.all.single()
         assertEquals("id-1", stored.id)
@@ -52,7 +52,7 @@ class EnginePreInitTest {
         h.engine.track("before")
         h.start()
         h.engine.track("after")
-        advanceUntilIdle()
+        runCurrent()
 
         val byName = h.store.all.associateBy { it.name }
         assertEquals(T0, byName.getValue("before").timestamp)
@@ -66,7 +66,7 @@ class EnginePreInitTest {
         h.engine.track("buffered")
         h.start()
         h.engine.track("live")
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("buffered", "live"), h.store.all.sortedBy { it.sequence }.map { it.name })
     }
@@ -78,7 +78,7 @@ class EnginePreInitTest {
         (1..5).forEach { h.engine.track("e$it") }
         assertTrue(h.logger.warnings.isNotEmpty())
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("e3", "e4", "e5"), h.store.all.sortedBy { it.sequence }.map { it.name })
     }
@@ -89,7 +89,7 @@ class EnginePreInitTest {
 
         (1..3).forEach { h.engine.track("e$it") }
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(3, h.store.all.size)
         assertTrue(h.logger.warnings.isEmpty())
@@ -101,7 +101,7 @@ class EnginePreInitTest {
 
         (1..501).forEach { h.engine.track("e$it") }
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         val names = h.store.all.sortedBy { it.sequence }.map { it.name }
         assertEquals(500, names.size)
@@ -117,7 +117,7 @@ class EnginePreInitTest {
         h.engine.track("")
         h.engine.track("b")
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("a", "b"), h.store.all.sortedBy { it.sequence }.map { it.name })
     }
@@ -130,7 +130,7 @@ class EnginePreInitTest {
         assertTrue(h.logger.warnings.isNotEmpty())
         h.engine.track("e")
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(false, h.store.all.single().seen)
     }
@@ -142,9 +142,9 @@ class EnginePreInitTest {
         h.store.failNextInsert = RuntimeException("boom")
 
         h.start()
-        advanceUntilIdle()
+        runCurrent()
         h.engine.track("live")
-        advanceUntilIdle()
+        runCurrent()
 
         assertTrue(h.store.all.any { it.name == "live" })
         assertTrue(h.logger.errors.isNotEmpty())

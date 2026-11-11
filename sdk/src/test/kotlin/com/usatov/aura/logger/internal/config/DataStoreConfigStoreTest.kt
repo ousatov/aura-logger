@@ -1,9 +1,11 @@
 package com.usatov.aura.logger.internal.config
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.usatov.aura.logger.core.EventTrackerConfig
@@ -38,7 +40,12 @@ class DataStoreConfigStoreTest {
 
     private fun newDataStore(): DataStore<Preferences> {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
-        return PreferenceDataStoreFactory.create(scope = scope, produceFile = ::file)
+        // Same corruption handling as the production DataStore in AuraLoggerRuntime.
+        return PreferenceDataStoreFactory.create(
+            corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+            scope = scope,
+            produceFile = ::file,
+        )
     }
 
     @Test

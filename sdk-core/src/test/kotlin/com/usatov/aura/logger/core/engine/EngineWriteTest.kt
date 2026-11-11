@@ -4,7 +4,7 @@ import app.cash.turbine.test
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.UnseenEventsProtection
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,7 +17,7 @@ class EngineWriteTest {
     private suspend fun TestScope.started(config: EventTrackerConfig = EventTrackerConfig()): EngineHarness =
         EngineHarness(this).also {
             it.start(config)
-            advanceUntilIdle()
+            runCurrent()
         }
 
     private fun noClearProtection() =
@@ -29,10 +29,10 @@ class EngineWriteTest {
         fun `marks only the given events`() = runTest {
             val h = started()
             repeat(3) { h.engine.track("e$it") }
-            advanceUntilIdle()
+            runCurrent()
 
             h.engine.markSeen(listOf("id-1", "id-3"))
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(mapOf("id-1" to true, "id-2" to false, "id-3" to true), h.store.all.associate { it.id to it.seen })
         }
@@ -41,14 +41,14 @@ class EngineWriteTest {
         fun `unknown, duplicate and already seen ids are ignored`() = runTest {
             val h = started()
             h.engine.track("e")
-            advanceUntilIdle()
+            runCurrent()
 
             assertDoesNotThrow {
                 h.engine.markSeen(listOf("id-1", "id-1", "missing", "", "   "))
                 h.engine.markSeen(setOf("id-1"))
                 h.engine.markSeen(emptyList())
             }
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.single().seen)
         }
@@ -59,7 +59,7 @@ class EngineWriteTest {
 
             h.engine.track("e")
             h.engine.markSeen(listOf("id-1"))
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.single().seen)
         }
@@ -68,14 +68,14 @@ class EngineWriteTest {
         fun `store failure is logged and not thrown`() = runTest {
             val h = started()
             h.engine.track("e")
-            advanceUntilIdle()
+            runCurrent()
             h.store.failMarkSeen = RuntimeException("boom")
 
             assertDoesNotThrow { h.engine.markSeen(listOf("id-1")) }
-            advanceUntilIdle()
+            runCurrent()
             h.store.failMarkSeen = null
             h.engine.track("after")
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.logger.errors.isNotEmpty())
             assertEquals(2, h.store.all.size)
@@ -87,7 +87,7 @@ class EngineWriteTest {
             repeat(1500) { h.engine.track("e$it") }
 
             h.engine.markSeen((1..1500).map { "id-$it" })
-            advanceUntilIdle()
+            runCurrent()
 
             assertTrue(h.store.all.all { it.seen })
         }
@@ -124,7 +124,7 @@ class EngineWriteTest {
             val deleted = h.engine.clearAll()
 
             assertEquals(100, deleted)
-            advanceUntilIdle()
+            runCurrent()
             assertTrue(h.store.all.isEmpty())
         }
 
@@ -134,7 +134,7 @@ class EngineWriteTest {
             h.engine.track("before")
             h.engine.clearAll()
             h.engine.track("after")
-            advanceUntilIdle()
+            runCurrent()
 
             assertEquals(listOf("after"), h.store.all.map { it.name })
         }
@@ -171,7 +171,7 @@ class EngineWriteTest {
             val h = started()
             h.engine.changes.test {
                 h.engine.track("e")
-                advanceUntilIdle()
+                runCurrent()
                 awaitItem()
                 cancelAndIgnoreRemainingEvents()
             }
@@ -181,14 +181,14 @@ class EngineWriteTest {
         fun `emits after markSeen and after clearAll`() = runTest {
             val h = started(noClearProtection())
             h.engine.track("e")
-            advanceUntilIdle()
+            runCurrent()
 
             h.engine.changes.test {
                 h.engine.markSeen(listOf("id-1"))
-                advanceUntilIdle()
+                runCurrent()
                 awaitItem()
                 h.engine.clearAll()
-                advanceUntilIdle()
+                runCurrent()
                 awaitItem()
                 cancelAndIgnoreRemainingEvents()
             }
@@ -198,7 +198,7 @@ class EngineWriteTest {
         fun `does not emit an initial value`() = runTest {
             val h = started()
             h.engine.changes.test {
-                advanceUntilIdle()
+                runCurrent()
                 expectNoEvents()
                 cancelAndIgnoreRemainingEvents()
             }
@@ -209,11 +209,11 @@ class EngineWriteTest {
             val h = EngineHarness(this)
             h.engine.changes.test {
                 h.engine.track("buffered")
-                advanceUntilIdle()
+                runCurrent()
                 expectNoEvents()
 
                 h.start()
-                advanceUntilIdle()
+                runCurrent()
                 awaitItem()
                 cancelAndIgnoreRemainingEvents()
             }
@@ -223,11 +223,11 @@ class EngineWriteTest {
         fun `emits for changes made directly in the store, such as a cleanup`() = runTest {
             val h = started()
             h.engine.track("e")
-            advanceUntilIdle()
+            runCurrent()
 
             h.engine.changes.test {
                 h.store.deleteAll(keepUnseen = false)
-                advanceUntilIdle()
+                runCurrent()
                 awaitItem()
                 cancelAndIgnoreRemainingEvents()
             }

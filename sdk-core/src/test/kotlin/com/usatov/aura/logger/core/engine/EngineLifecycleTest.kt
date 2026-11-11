@@ -2,7 +2,7 @@ package com.usatov.aura.logger.core.engine
 
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.UnseenEventsProtection
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -24,7 +24,7 @@ class EngineLifecycleTest {
         val config = EventTrackerConfig(retentionDays = 3, maxEvents = 42)
 
         assertTrue(h.start(config))
-        advanceUntilIdle()
+        runCurrent()
 
         assertTrue(h.engine.isStarted)
         assertEquals(config, h.configStore.stored)
@@ -37,12 +37,12 @@ class EngineLifecycleTest {
         val h = EngineHarness(this)
         val first = EventTrackerConfig(retentionDays = 3)
         h.start(first)
-        advanceUntilIdle()
+        runCurrent()
         val warningsBefore = h.logger.warnings.size
 
         assertFalse(h.start(EventTrackerConfig(retentionDays = 30)))
         assertFalse(h.start(first))
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(first, h.configStore.stored)
         assertEquals(listOf(first), h.configStore.writes)
@@ -57,7 +57,7 @@ class EngineLifecycleTest {
         val config = EventTrackerConfig(retentionDays = 2, maxEvents = 5)
 
         h.start(config)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(config, h.configStore.stored)
     }
@@ -76,7 +76,7 @@ class EngineLifecycleTest {
     fun `updateConfig persists the config before returning and schedules a one-time cleanup`() = runTest {
         val h = EngineHarness(this)
         h.start()
-        advanceUntilIdle()
+        runCurrent()
         val newConfig = EventTrackerConfig(
             retentionDays = 1,
             maxEvents = 10,
@@ -94,7 +94,7 @@ class EngineLifecycleTest {
     fun `every updateConfig schedules a one-time cleanup and the last config wins`() = runTest {
         val h = EngineHarness(this)
         h.start()
-        advanceUntilIdle()
+        runCurrent()
 
         h.engine.updateConfig(EventTrackerConfig(maxEvents = 10))
         h.engine.updateConfig(EventTrackerConfig(maxEvents = 20))
@@ -108,11 +108,11 @@ class EngineLifecycleTest {
     fun `start ignored later does not change the config set by updateConfig`() = runTest {
         val h = EngineHarness(this)
         h.start(EventTrackerConfig(maxEvents = 1))
-        advanceUntilIdle()
+        runCurrent()
         h.engine.updateConfig(EventTrackerConfig(maxEvents = 2))
 
         h.start(EventTrackerConfig(maxEvents = 3))
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(2, h.configStore.stored?.maxEvents)
     }
