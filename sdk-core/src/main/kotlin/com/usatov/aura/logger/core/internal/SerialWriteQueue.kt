@@ -137,7 +137,8 @@ internal sealed class WriteOp {
                 val value = block()
                 result?.complete(value)
             } catch (e: CancellationException) {
-                result?.completeExceptionally(e)
+                // The queue was stopped; the caller was not cancelled, so it gets a stopped-queue error.
+                result?.completeExceptionally(stoppedError(e))
                 throw e
             } catch (e: Throwable) {
                 if (result != null) result.completeExceptionally(e) else logger.error("Failed to $description", e)
@@ -145,8 +146,11 @@ internal sealed class WriteOp {
         }
 
         override fun onAbandoned(logger: AuraLogger) {
-            val error = IllegalStateException("Aura Logger is stopped; could not $description")
+            val error = stoppedError()
             if (result != null) result.completeExceptionally(error) else logger.error(error.message.orEmpty())
         }
+
+        private fun stoppedError(cause: Throwable? = null): IllegalStateException =
+            IllegalStateException("Aura Logger is stopped; could not $description", cause)
     }
 }
