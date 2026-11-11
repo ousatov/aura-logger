@@ -48,7 +48,7 @@ class ActionsViewModel @Inject constructor(
             try {
                 val deleted = tracker.clearAll()
                 appEvents.eventsCleared(deleted)
-                sendEffect(Effect.Cleared(deleted))
+                sendEffect(Effect.Cleared(deleted, kept = null))
             } catch (e: CancellationException) {
                 throw e
             } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
