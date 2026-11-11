@@ -88,6 +88,8 @@ class ModelsTest {
             assertEquals(1024, settings.maxPropertyValueLength)
             assertEquals(24, settings.cleanupPeriodHours)
             assertEquals(1, settings.cleanupInitialDelayHours)
+            assertEquals(true, settings.enforceLimitOnWrite)
+            assertEquals(LimitOverflowStrategy.KEEP_NEW_EVENTS, settings.limitOverflowStrategy)
         }
 
         @Test
