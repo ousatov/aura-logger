@@ -2,6 +2,7 @@ package com.usatov.aura.logger.core.engine
 
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.InternalAuraLoggerApi
+import com.usatov.aura.logger.core.internal.DayCalendar
 import com.usatov.aura.logger.core.spi.AuraLogger
 import com.usatov.aura.logger.core.spi.EventStore
 import com.usatov.aura.logger.core.spi.TimeZoneProvider
@@ -28,7 +29,27 @@ public class EventCleaner(
     private val logger: AuraLogger,
 ) {
     /** Runs one cleanup with [config]. Main-safe. */
-    public suspend fun cleanup(config: EventTrackerConfig): CleanupResult = TODO("Not implemented yet")
+    public suspend fun cleanup(config: EventTrackerConfig): CleanupResult {
+        val protection = config.unseenEventsProtection
+        val now = clock.now().toEpochMilliseconds()
+        val retentionStart = DayCalendar.startOfDay(
+            epochMillis = now,
+            zoneId = timeZoneProvider.currentTimeZoneId(),
+            daysBefore = config.retentionDays.toLong(),
+        )
+        val deletedByRetention = eventStore.deleteOlderThan(retentionStart, keepUnseen = protection.onRetention)
+        val deletedByLimit = eventStore.deleteOldestAbove(config.maxEvents, keepUnseen = protection.onLimit)
+        if (protection.onLimit) {
+            val remaining = eventStore.count()
+            if (remaining > config.maxEvents) {
+                logger.warn(
+                    "$remaining events remain after cleanup (limit ${config.maxEvents}): " +
+                        "unseen events are protected from the limit",
+                )
+            }
+        }
+        return CleanupResult(deletedByRetention = deletedByRetention, deletedByLimit = deletedByLimit)
+    }
 }
 
 /**
