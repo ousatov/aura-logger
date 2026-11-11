@@ -3,6 +3,7 @@ package com.usatov.aura.logger.demo.actions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -42,11 +43,19 @@ fun ActionsSection(modifier: Modifier = Modifier) {
                     effect.count,
                     effect.count,
                 )
-                is Effect.Cleared -> resources.getQuantityString(
-                    R.plurals.actions_cleared,
-                    effect.deleted,
-                    effect.deleted,
-                )
+                is Effect.Cleared -> {
+                    val deleted = resources.getQuantityString(
+                        R.plurals.actions_cleared,
+                        effect.deleted,
+                        effect.deleted,
+                    )
+                    val kept = effect.kept
+                    if (kept == null || kept <= 0) {
+                        deleted
+                    } else {
+                        deleted + " " + resources.getQuantityString(R.plurals.actions_cleared_kept, kept, kept)
+                    }
+                }
                 Effect.ClearFailed -> resources.getString(R.string.actions_clear_failed)
             }
             snackbarHostState.currentSnackbarData?.dismiss()
@@ -54,7 +63,7 @@ fun ActionsSection(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(stringResource(R.string.actions_title), style = MaterialTheme.typography.titleMedium)
         Button(
             onClick = { viewModel.onIntent(Intent.TrackEvent) },
