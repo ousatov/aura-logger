@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="config_title">Configuration</string>
+    <string name="config_retention_label">Retention period (days)</string>
+    <string name="config_max_events_label">Max events</string>
+    <string name="config_track_navigation_label">Track navigation events</string>
+    <string name="config_clear_unseen_label">Clear All also deletes unseen events</string>
+    <string name="config_clear_unseen_hint">By the assignment, events the user never saw are kept; turn on to clear everything.</string>
+    <string name="config_save">Save</string>
+    <string name="config_saved">Configuration saved</string>
+    <string name="config_save_failed">Failed to save configuration</string>
+    <string name="config_error_empty">Enter a number</string>
+    <string name="config_error_not_a_number">Not a valid number</string>
+    <string name="config_error_out_of_range">Enter a value from %1$d to %2$d</string>
+</resources>

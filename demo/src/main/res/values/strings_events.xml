@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="events_empty">No events tracked</string>
+    <string name="events_load_failed">Could not load events</string>
+    <string name="events_load_more_failed">Could not load more events</string>
+    <string name="events_retry">Retry</string>
+    <string name="events_seen_hint">New = not seen yet. Clear All keeps unseen events unless Settings allows deleting them.</string>
+    <string name="events_new_badge">New</string>
+    <string name="events_day_today">Today</string>
+    <string name="events_day_yesterday">Yesterday</string>
+</resources>

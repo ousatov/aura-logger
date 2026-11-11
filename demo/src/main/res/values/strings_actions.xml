@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="actions_title">Test actions</string>
+    <string name="actions_track_event">Track Event</string>
+    <string name="actions_track_hundred">Track 100 Events</string>
+    <string name="actions_track_with_properties">Track with Properties</string>
+    <string name="actions_clear_all">Clear All Events</string>
+    <string name="actions_clear_dialog_title">Clear all events?</string>
+    <string name="actions_clear_dialog_message">Seen events will be deleted. Unseen events are kept, unless \"Clear All also deletes unseen events\" is on in Settings.</string>
+    <string name="actions_clear_confirm">Clear</string>
+    <string name="actions_clear_cancel">Cancel</string>
+    <plurals name="actions_tracked">
+        <item quantity="one">Tracked %d event</item>
+        <item quantity="other">Tracked %d events</item>
+    </plurals>
+    <plurals name="actions_cleared">
+        <item quantity="one">Deleted %d event</item>
+        <item quantity="other">Deleted %d events</item>
+    </plurals>
+    <plurals name="actions_cleared_kept">
+        <item quantity="one">%d unseen event is kept: open it in Events to make it clearable.</item>
+        <item quantity="other">%d unseen events are kept: open them in Events to make them clearable.</item>
+    </plurals>
+    <string name="actions_clear_failed">Failed to clear events</string>
+</resources>
