@@ -1,0 +1,23 @@
+package com.usatov.aura.logger.demo
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import com.usatov.aura.logger.demo.main.MainScreen
+import com.usatov.aura.logger.demo.ui.theme.AuraLoggerTheme
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            AuraLoggerTheme {
+                MainScreen()
+            }
+        }
+    }
+}
