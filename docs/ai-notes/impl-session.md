@@ -53,6 +53,14 @@ KDoc. All three were confirmed in the code and fixed, one commit each:
   maps `CorruptionException` to `null`. Other I/O errors still throw, so the worker retries
   (`docs/impl-notes.md` #24).
 
+A second review pass over those fixes found four low-severity gaps in `SerialWriteQueue`, all
+confirmed and fixed in one commit:
+- cleanup ran only on `CancellationException`; it is now in `finally`;
+- every `CancellationException` was treated as "queue stopped", so a timeout inside a store call
+  would have stopped the queue. Now only cancellation of the queue's own scope stops it;
+- a task without an awaiting caller logged nothing when the queue stopped mid-run; it now logs;
+- a stopped batch reported all its events as lost; now only the unwritten ones are reported.
+
 Lesson: the first draft relied on `onUndeliveredElement` for every operation and missed that
 `receive()`/`tryReceive()` hand ownership to the consumer. Cancellation paths need the same care as
 the normal path.
