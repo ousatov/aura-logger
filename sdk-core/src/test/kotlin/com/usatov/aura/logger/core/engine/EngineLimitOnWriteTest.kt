@@ -4,6 +4,13 @@ import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.EventTrackerConfig
 import com.usatov.aura.logger.core.LimitOverflowStrategy
 import com.usatov.aura.logger.core.UnseenEventsProtection
+import com.usatov.aura.logger.core.spi.EventStore
+import com.usatov.aura.logger.core.testing.FakeEventStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -197,5 +204,83 @@ class EngineLimitOnWriteTest {
         runCurrent()
 
         assertEquals(3, h.store.all.size)
+    }
+
+    private fun TestScope.startWith(
+        store: EventStore,
+        config: EventTrackerConfig,
+        settings: AuraLoggerSettings = AuraLoggerSettings(),
+        scope: CoroutineScope = backgroundScope,
+    ): EngineHarness = EngineHarness(this, settings).also {
+        it.engine.start(
+            EngineDependencies(config, store, it.configStore, it.scheduler, it.clock, scope, StandardTestDispatcher(testScheduler)),
+        )
+        runCurrent()
+    }
+
+    @Test
+    fun `failure to apply the limit after a write keeps the new events and is logged`() = runTest {
+        val delegate = FakeEventStore()
+        val store = object : EventStore by delegate {
+            override suspend fun deleteOldestAbove(maxEvents: Int, keepUnseen: Boolean): Int = throw IllegalStateException("locked")
+        }
+        val h = startWith(store, config(maxEvents = 1, onLimit = false))
+
+        h.trackAll("e1", "e2")
+        runCurrent()
+        h.trackAll("e3")
+        runCurrent()
+
+        assertEquals(3, delegate.all.size)
+        assertTrue(h.logger.errors.isNotEmpty())
+    }
+
+    @Test
+    fun `DROP_NEW_EVENTS stores the batch above the limit when room cannot be computed`() = runTest {
+        val delegate = FakeEventStore()
+        val store = object : EventStore by delegate {
+            override suspend fun count(): Int = throw IllegalStateException("locked")
+        }
+        val h = startWith(store, config(maxEvents = 1), AuraLoggerSettings(limitOverflowStrategy = LimitOverflowStrategy.DROP_NEW_EVENTS))
+
+        h.trackAll("e1", "e2", "e3")
+        runCurrent()
+
+        assertEquals(3, delegate.all.size)
+        assertTrue(h.logger.errors.isNotEmpty())
+    }
+
+    @Test
+    fun `DROP_NEW_EVENTS drops the whole batch when there is no room at all`() = runTest {
+        val h = started(config(maxEvents = 2), AuraLoggerSettings(limitOverflowStrategy = LimitOverflowStrategy.DROP_NEW_EVENTS))
+        h.trackAll("e1", "e2")
+        runCurrent()
+
+        h.trackAll("e3")
+        runCurrent()
+
+        assertEquals(listOf("e2", "e1"), h.names())
+        assertTrue(h.logger.warnings.isNotEmpty())
+    }
+
+    @Test
+    fun `stopping the queue while the limit is applied keeps the written events`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val delegate = FakeEventStore()
+        val store = object : EventStore by delegate {
+            override suspend fun deleteOldestAbove(maxEvents: Int, keepUnseen: Boolean): Int {
+                gate.await()
+                return delegate.deleteOldestAbove(maxEvents, keepUnseen)
+            }
+        }
+        val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        val h = startWith(store, config(maxEvents = 1, onLimit = false), scope = queueScope)
+
+        h.trackAll("e1", "e2")
+        runCurrent()
+        queueScope.cancel()
+        runCurrent()
+
+        assertEquals(2, delegate.all.size)
     }
 }
