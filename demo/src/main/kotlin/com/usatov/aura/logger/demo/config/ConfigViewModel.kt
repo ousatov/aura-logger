@@ -12,7 +12,9 @@ import com.usatov.aura.logger.demo.core.mvi.MviViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Config section. On creation it loads [DemoConfigRepository.config] and fills both inputs and
@@ -72,12 +74,26 @@ class ConfigViewModel @Inject constructor(
         val retention = snapshot.retentionInput.trim().toIntOrNull() ?: return
         val maxEvents = snapshot.maxEventsInput.trim().toIntOrNull() ?: return
         setState { copy(isSaving = true) }
+        val previous = snapshot.savedConfig
         viewModelScope.launch {
+            val config = EventTrackerConfig(retentionDays = retention, maxEvents = maxEvents)
             try {
-                val config = EventTrackerConfig(retentionDays = retention, maxEvents = maxEvents)
                 repository.save(config)
-                tracker.updateConfig(config)
-                appEvents.configChanged(config)
+                try {
+                    tracker.updateConfig(config)
+                } catch (e: Exception) {
+                    // Keep the stored config and the SDK config consistent: undo the write so
+                    // that the inputs differ from the saved config again and Save can be retried.
+                    if (previous != null) rollback(previous)
+                    throw e
+                }
+                try {
+                    appEvents.configChanged(config)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // The config is stored and applied; a failed analytics event is not a save failure.
+                }
                 setState { copy(isSaving = false, savedConfig = config) }
                 sendEffect(Effect.Saved)
             } catch (e: CancellationException) {
@@ -87,6 +103,15 @@ class ConfigViewModel @Inject constructor(
                 sendEffect(Effect.SaveFailed)
             }
         }
+    }
+
+    private suspend fun rollback(previous: EventTrackerConfig) {
+        try {
+            withContext(NonCancellable) { repository.save(previous) }
+        } catch (_: Exception) {
+            // Best effort: the failure is reported to the user either way.
+        }
+        setState { copy(savedConfig = previous) }
     }
 
     private companion object {
