@@ -1,10 +1,18 @@
 plugins {
     alias(libs.plugins.aura.jvm.library)
+    alias(libs.plugins.aura.kover)
+    `java-test-fixtures`
 }
 
 dependencies {
     api(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+
+    // Shared fakes and the EventStore contract, also used by the sdk module tests.
+    testFixturesImplementation(libs.junit4)
+    testFixturesImplementation(libs.turbine)
+    testFixturesImplementation(libs.kotlinx.coroutines.core)
+    testRuntimeOnly(libs.junit.vintage.engine)
 }
 
 kotlin {
