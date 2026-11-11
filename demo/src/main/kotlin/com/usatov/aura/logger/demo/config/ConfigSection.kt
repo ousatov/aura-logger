@@ -5,10 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -23,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -36,7 +32,7 @@ import com.usatov.aura.logger.demo.core.ui.Dimens
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
 import com.usatov.aura.logger.demo.core.ui.showLatest
 
-/** Settings: retention and max events fields with a Save button, and two switches saved when the tab is left. */
+/** Settings: retention and max events fields and two switches, all saved when the tab is left. */
 @Composable
 fun ConfigSection(modifier: Modifier = Modifier) {
     val viewModel: ConfigViewModel = hiltViewModel()
@@ -96,21 +92,11 @@ fun ConfigSection(modifier: Modifier = Modifier) {
             enabled = loaded,
             onChange = { viewModel.onIntent(Intent.ClearDeletesUnseenChanged(it)) },
         )
-        Button(
-            onClick = { viewModel.onIntent(Intent.Save) },
-            enabled = state.canSave,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Dimens.ItemSpacing),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (state.isSaving) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                }
-                Text(stringResource(R.string.config_save))
-            }
-        }
+        Text(
+            text = stringResource(R.string.config_autosave_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
