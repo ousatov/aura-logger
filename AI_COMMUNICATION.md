@@ -156,8 +156,10 @@ More snippets: [`docs/ai-notes/impl-session.md`](docs/ai-notes/impl-session.md) 
 
 ## 8. Time
 
-- **Total:** about 11 hours on the day of the assignment — about 1 hour of planning, then 13:55–23:45 by git
-  timestamps (build setup, SDK, tests, reconciliation, demo, fixes, release).
+- **Total:** about 7 hours of active work on the day of the assignment, in three blocks separated by AI usage-limit
+  pauses: about 4 hours (planning, build setup, SDK API, tests, implementation and reconciliation), about 2 hours
+  (demo skeleton, parallel feature tickets, manual testing and fixes) and about 1 hour (polish, release, documents).
+  Git timestamps span 13:55–23:45 because of the pauses.
 - **AI sessions:** the SDK implementation session used about 1 hour of model time; demo ticket sessions 10–30
   minutes each; the per-commit reviewer about 1 minute per commit.
 - **Time saved vs spent:** writing the same scope by hand (SDK with tests, demo with 6 features, build setup)
