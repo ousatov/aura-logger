@@ -6,6 +6,7 @@ import com.usatov.aura.logger.core.LimitOverflowStrategy
 import com.usatov.aura.logger.core.UnseenEventsProtection
 import com.usatov.aura.logger.core.spi.EventStore
 import com.usatov.aura.logger.core.testing.FakeEventStore
+import com.usatov.aura.logger.core.testing.record
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -282,5 +283,31 @@ class EngineLimitOnWriteTest {
         runCurrent()
 
         assertEquals(2, delegate.all.size)
+    }
+
+    @Test
+    fun `without protection an older event written later is deleted right after it is written`() = runTest {
+        val h = EngineHarness(this)
+        // Two newer events stored by a previous process.
+        h.store.seed(record("newer1", T0 + 1_000), record("newer2", T0 + 2_000))
+        h.engine.track("early") // tracked before init, timestamp T0
+
+        h.start(config(maxEvents = 2, onLimit = false))
+        runCurrent()
+
+        assertEquals(listOf("newer2", "newer1"), h.store.newestFirst.map { it.id })
+    }
+
+    @Test
+    fun `with protection an older unseen event written later is kept`() = runTest {
+        val h = EngineHarness(this)
+        h.store.seed(record("newer1", T0 + 1_000), record("newer2", T0 + 2_000), seen = true)
+        h.engine.track("early")
+
+        h.start(config(maxEvents = 2, onLimit = true))
+        runCurrent()
+
+        assertTrue(h.store.all.any { it.name == "early" })
+        assertEquals(2, h.store.all.size)
     }
 }
