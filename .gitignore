@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing (never commit)
+keystore.properties
+*.jks
+*.keystore
+
+# Local tool settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
