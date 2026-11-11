@@ -1,5 +1,6 @@
 package com.usatov.aura.logger.internal.config
 
+import androidx.datastore.core.CorruptionException
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -25,7 +26,13 @@ internal class DataStoreConfigStore(
 ) : ConfigStore {
 
     override suspend fun read(): EventTrackerConfig? {
-        val preferences = dataStore.data.first()
+        val preferences = try {
+            dataStore.data.first()
+        } catch (_: CorruptionException) {
+            // Unreadable file: treated as an invalid config. Other I/O errors are thrown so that
+            // the caller (the cleanup worker) retries instead of applying defaults.
+            return null
+        }
         if (preferences[SCHEMA_VERSION] != CURRENT_SCHEMA_VERSION) return null
         val retentionDays = preferences[RETENTION_DAYS] ?: return null
         val maxEvents = preferences[MAX_EVENTS] ?: return null

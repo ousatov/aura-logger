@@ -3,8 +3,10 @@ package com.usatov.aura.logger.internal
 import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.work.WorkManager
 import com.usatov.aura.logger.core.AuraLoggerSettings
@@ -90,6 +92,11 @@ internal object AuraLoggerRuntime {
         dataStore ?: run {
             val appContext = context.applicationContext ?: context
             PreferenceDataStoreFactory.create(
+                // A corrupted file is replaced with an empty one, which reads as "no config".
+                corruptionHandler = ReplaceFileCorruptionHandler { e ->
+                    logger.error("Persisted Aura Logger config is corrupted; it is reset", e)
+                    emptyPreferences()
+                },
                 scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
                 produceFile = { appContext.preferencesDataStoreFile(settings.configFileName) },
             )
