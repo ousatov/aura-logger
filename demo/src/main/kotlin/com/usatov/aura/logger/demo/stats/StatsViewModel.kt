@@ -71,7 +71,8 @@ class StatsViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            setState { copy(isLoading = false, loadFailed = true) }
+            // isLoading is kept: until the first success nothing is loaded, so "empty" must not be claimed.
+            setState { copy(loadFailed = true) }
         }
     }
 }
