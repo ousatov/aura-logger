@@ -1,4 +1,4 @@
-package com.usatov.aura.logger.demo.ui.theme
+package com.usatov.aura.logger.demo.core.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme

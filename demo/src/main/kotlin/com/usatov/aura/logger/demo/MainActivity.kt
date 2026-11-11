@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.usatov.aura.logger.demo.main.MainScreen
-import com.usatov.aura.logger.demo.ui.theme.AuraLoggerTheme
+import com.usatov.aura.logger.demo.core.ui.theme.AuraLoggerTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
