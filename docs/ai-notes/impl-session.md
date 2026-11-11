@@ -39,6 +39,24 @@ Only the requirements allowed by `CLAUDE.md` §11: the public API and KDoc of `s
   generated `AuraLoggerDatabase_Impl` turned out to be an `internal` class of the same module, so
   it is now passed as an explicit factory (no reflection, no R8 keep rule).
 
+## Independent code review (follow-up)
+A separate review of `feature/sdk-impl` found three places where the code did not match its own
+KDoc. All three were confirmed in the code and fixed, one commit each:
+- `SerialWriteQueue.consume`: operations taken out of the channel (the in-flight batch, the
+  operation held back as `pending`) were not covered by `onUndeliveredElement`. On cancellation
+  their events were lost without a log line and an awaiting `clearAll`/`updateConfig` could hang.
+  Now they are abandoned explicitly: lost events are logged and awaiting callers fail.
+- `WriteOp.Task.run`: on cancellation the awaiting caller got the queue's `CancellationException`,
+  which looks like its own cancellation. It now gets `IllegalStateException`, as the KDoc says.
+- `DataStoreConfigStore.read`: a corrupted preferences file made `read()` throw, so the cleanup
+  worker failed on every run. The DataStore now has a `ReplaceFileCorruptionHandler`, and `read()`
+  maps `CorruptionException` to `null`. Other I/O errors still throw, so the worker retries
+  (`docs/impl-notes.md` #24).
+
+Lesson: the first draft relied on `onUndeliveredElement` for every operation and missed that
+`receive()`/`tryReceive()` hand ownership to the consumer. Cancellation paths need the same care as
+the normal path.
+
 ## Verification
 - `./gradlew check assembleDebug assembleRelease` (includes `checkKotlinAbi` for `sdk-core`, so the
   public API is unchanged).
