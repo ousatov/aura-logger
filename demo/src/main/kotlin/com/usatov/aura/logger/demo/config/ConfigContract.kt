@@ -33,12 +33,13 @@ object ConfigContract {
     ) {
         /**
          * Save is enabled when the config is loaded, both inputs are valid, nothing is being saved
-         * and the inputs differ from [savedConfig].
+         * and the parsed input values differ from [savedConfig] (so `"007"` or `"+7"` equal to a
+         * saved `7` does not enable it).
          */
         val canSave: Boolean
             get() = savedConfig != null && retentionError == null && maxEventsError == null && !isSaving &&
-                (retentionInput.trim() != savedConfig.retentionDays.toString() ||
-                    maxEventsInput.trim() != savedConfig.maxEvents.toString())
+                (retentionInput.trim().toIntOrNull() != savedConfig.retentionDays ||
+                    maxEventsInput.trim().toIntOrNull() != savedConfig.maxEvents)
     }
 
     /** Why an input is invalid. Leading and trailing whitespace is ignored. */
