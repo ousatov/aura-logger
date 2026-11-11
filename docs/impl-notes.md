@@ -1,0 +1,29 @@
+# SDK implementation notes
+
+Ambiguities found while implementing the SDK from the public API, KDoc, the assignment and
+`CLAUDE.md`, and the reading chosen for each. Paths are relative to the repository root.
+
+| # | Question | Chosen reading | Where |
+|---|----------|----------------|-------|
+| 1 | A `suspend` call with an invalid argument before initialisation: `IllegalArgumentException` or `IllegalStateException`? | Arguments are checked first, so `IllegalArgumentException` wins. | `EventTrackerEngine.getRecentEvents`, `getEventsPage` |
+| 2 | "Reads see every write that was queued before the read started": how? | Every read first queues a no-op barrier on the serial write queue and waits for it, then reads on `readDispatcher`. Writes queued after the barrier may also be visible. | `EventTrackerEngine.awaitQueuedWrites` |
+| 3 | Does `updateConfig` go through the serial queue? | Yes. This keeps it ordered after the config persisted by `start`, so an early `updateConfig` is never overwritten by the init config. `clearAll` uses the latest config's `onClearAll`. | `EventTrackerEngine.updateConfig` |
+| 4 | `updateConfig`: the config was persisted but scheduling the one-time cleanup failed. | The call returns normally (the config is persisted, as the KDoc promises) and the scheduling error is logged. A failed write is thrown to the caller. | `EventTrackerEngine.updateConfig` |
+| 5 | `EventPage.nextCursor` must be `null` when the page reached the oldest event, also when the page is exactly full. | The store is asked for `pageSize + 1` rows; the extra row only decides whether a next cursor exists. | `EventTrackerEngine.getEventsPage` |
+| 6 | `getStats` consistency: total, today and per-day are three queries. | Not in one transaction; a concurrent cleanup can make them differ slightly. Accepted for a statistics snapshot. | `EventTrackerEngine.getStats` |
+| 7 | Retention cut-off date arithmetic without `kotlinx-datetime` (not an allowed dependency of `sdk-core`). | `java.time` is used internally in `sdk-core` (it is a JVM module); no `java.*` type appears in public signatures. A KMP port would replace `DayCalendar` with `kotlinx-datetime`. An unknown time zone id falls back to the JVM default zone. | `sdk-core/.../internal/DayCalendar.kt` |
+| 8 | Locking in `sdk-core` (KMP-ready). | JVM `synchronized` and `java.util.concurrent.atomic.AtomicBoolean` are used internally. Same KMP note as above. | `EventTrackerEngine`, `SerialWriteQueue` |
+| 9 | One failing event in a batch insert. | Bursts of `track` are written in batches of up to 500 in one transaction. If a batch fails, its events are inserted one by one, so only the failing event is lost (and logged). | `SerialWriteQueue.insert` |
+| 10 | Track call ordering with concurrent callers. | Id, timestamp, date and enqueueing happen under one short lock, so the insertion sequence follows the order in which calls took the lock; ties of equal timestamps are broken by that sequence. Validation and JSON encoding run outside the lock. | `EventTrackerEngine.track` |
+| 11 | The properties map can be mutated by the caller after `track` returns. | A snapshot (`toMap()`) is taken at call time. | `EventTrackerEngine.track` |
+| 12 | `markSeen` with an empty collection or duplicate ids. | Empty: no-op. Duplicates are removed. Ids are updated in chunks of 500 per statement in one transaction (SQLite variable limit). | `EventTrackerEngine.markSeen`, `EventDao.markSeen` |
+| 13 | Stored properties JSON that cannot be parsed (corrupted row). | The event is returned with empty properties and a warning is logged. | `EventTrackerEngine.decodeProperties` |
+| 14 | `changes` must "never complete and not fail". | Store errors are logged and the observation is retried after 1 s; if the store flow ever completes, the flow suspends forever. The Room flow is created with `emitInitialState = false`, so there is no initial emission. | `EventTrackerEngine.changes`, `RoomEventStore.observeChanges` |
+| 15 | Limit cleanup with `onLimit` protection: which events are "above" the limit? | Events are ranked newest first; every seen event ranked after position `maxEvents` is deleted. Unseen events keep their rank (they count towards the limit) and are not deleted. A warning is logged when the limit cannot be reached. | `EventDao.deleteOldestAbove`, `EventCleaner.cleanup` |
+| 16 | Persisted config written by another version, or partially written. | A schema version key is stored; a different version, a missing key or a value rejected by `EventTrackerConfig` makes `read()` return `null` (the worker then uses defaults). I/O errors are thrown. | `DataStoreConfigStore` |
+| 17 | WorkManager is not initialised (app disabled the default initializer without a configuration). | `init` still starts the tracker; a scheduler that only logs errors is used, so tracking keeps working without background cleanup. | `AuraLoggerRuntime.cleanupScheduler` |
+| 18 | Cleanup worker failure policy. | `Result.retry()` on any failure, as stated in the KDoc (WorkManager backoff applies). | `CleanupWorker.doWork` |
+| 19 | Is the one-time cleanup expedited? | No. Expedited work needs `getForegroundInfo()` (a notification) on API < 31; a plain one-time request runs soon enough. | `WorkManagerCleanupScheduler.scheduleOneTime` |
+| 20 | R8 and reflection. | The Room database is built with an explicit factory (`AuraLoggerDatabase_Impl()`), so no reflection is used. The worker class gets an explicit keep rule because WorkManager persists its class name. | `RoomEventStore.create`, `sdk/consumer-rules.pro` |
+| 21 | Second `init` call. | `EventTrackerSDK.init` checks `isStarted` under its own lock and logs a warning; the clock and stores of the first call stay in use. | `EventTrackerSDK.init` |
+| 22 | Clock of the cleanup worker. | The worker uses the clock passed to `init` in this process (kept in `AuraLoggerRuntime.clock`), the system clock otherwise. | `CleanupWorker.doWork` |
