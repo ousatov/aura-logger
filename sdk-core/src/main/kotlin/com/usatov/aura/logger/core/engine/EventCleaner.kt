@@ -1,0 +1,44 @@
+package com.usatov.aura.logger.core.engine
+
+import com.usatov.aura.logger.core.EventTrackerConfig
+import com.usatov.aura.logger.core.InternalAuraLoggerApi
+import com.usatov.aura.logger.core.spi.AuraLogger
+import com.usatov.aura.logger.core.spi.EventStore
+import com.usatov.aura.logger.core.spi.TimeZoneProvider
+import kotlin.time.Clock
+
+/**
+ * Applies an [EventTrackerConfig] to stored events. Used by the background cleanup worker.
+ *
+ * One [cleanup] run, in this order:
+ * 1. Retention: deletes events with a timestamp before the start of the day that is
+ *    [EventTrackerConfig.retentionDays] days before the current day ([clock], time zone from
+ *    [timeZoneProvider] at run time). Unseen events are kept if
+ *    `unseenEventsProtection.onRetention` is set.
+ * 2. Limit: deletes the oldest remaining events so that at most [EventTrackerConfig.maxEvents]
+ *    remain. Unseen events are kept, but still counted, if `unseenEventsProtection.onLimit` is set.
+ *
+ * Storage errors are propagated to the caller (the worker decides whether to retry).
+ */
+@InternalAuraLoggerApi
+public class EventCleaner(
+    private val eventStore: EventStore,
+    private val clock: Clock,
+    private val timeZoneProvider: TimeZoneProvider,
+    private val logger: AuraLogger,
+) {
+    /** Runs one cleanup with [config]. Main-safe. */
+    public suspend fun cleanup(config: EventTrackerConfig): CleanupResult = TODO("Not implemented yet")
+}
+
+/**
+ * Outcome of one [EventCleaner.cleanup] run.
+ *
+ * @property deletedByRetention number of events deleted by the retention period.
+ * @property deletedByLimit number of events deleted by the max events limit.
+ */
+@InternalAuraLoggerApi
+public data class CleanupResult(
+    val deletedByRetention: Int,
+    val deletedByLimit: Int,
+)

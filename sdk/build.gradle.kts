@@ -14,3 +14,10 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.datastore.preferences)
 }
+
+kotlin {
+    compilerOptions {
+        // Modules of the SDK itself may use the cross-module internal API.
+        optIn.add("com.usatov.aura.logger.core.InternalAuraLoggerApi")
+    }
+}
