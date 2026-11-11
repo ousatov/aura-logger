@@ -9,6 +9,9 @@ import com.usatov.aura.logger.demo.testing.FakeEventTracker
 import com.usatov.aura.logger.demo.testing.FixedClock
 import com.usatov.aura.logger.demo.testing.MainDispatcherExtension
 import com.usatov.aura.logger.demo.testing.millisOf
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -32,6 +35,18 @@ class StatsViewModelTest {
 
     private fun day(date: String, latest: Long, count: Int) = DailyEventCount(date, latest, count)
 
+    /**
+     * The refresh loop runs forever in `viewModelScope`, which shares the test scheduler; it must be
+     * cancelled before `runTest` finishes, otherwise `runTest` keeps advancing time until its timeout.
+     */
+    private fun statsTest(body: suspend TestScope.() -> Unit) = runTest(main.dispatcher) {
+        try {
+            body()
+        } finally {
+            vm.viewModelScope.cancel()
+        }
+    }
+
     @Test
     fun `initially loading and not empty`() {
         assertTrue(vm.state.value.isLoading)
@@ -40,7 +55,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `visible loads immediately`() = runTest(main.dispatcher) {
+    fun `visible loads immediately`() = statsTest {
         tracker.stats = EventStats(totalCount = 5, todayCount = 2, dailyCounts = listOf(day("15/03/2026", clock.millis, 5)))
 
         vm.onIntent(Intent.Visible)
@@ -56,7 +71,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `refreshes every 3 seconds while visible and stops when hidden`() = runTest(main.dispatcher) {
+    fun `refreshes every 3 seconds while visible and stops when hidden`() = statsTest {
         vm.onIntent(Intent.Visible)
         runCurrent()
         advanceTimeBy(3_000); runCurrent()
@@ -74,7 +89,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `no refresh before the interval has passed`() = runTest(main.dispatcher) {
+    fun `no refresh before the interval has passed`() = statsTest {
         vm.onIntent(Intent.Visible)
         runCurrent()
         advanceTimeBy(2_999); runCurrent()
@@ -82,7 +97,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `repeated visible does not start a second loop`() = runTest(main.dispatcher) {
+    fun `repeated visible does not start a second loop`() = statsTest {
         vm.onIntent(Intent.Visible)
         vm.onIntent(Intent.Visible)
         runCurrent()
@@ -97,7 +112,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `visible again after hidden resumes refreshing`() = runTest(main.dispatcher) {
+    fun `visible again after hidden resumes refreshing`() = statsTest {
         vm.onIntent(Intent.Visible); runCurrent()
         vm.onIntent(Intent.Hidden); runCurrent()
         advanceTimeBy(10_000); runCurrent()
@@ -108,7 +123,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `only the last 7 calendar days are shown, newest first`() = runTest(main.dispatcher) {
+    fun `only the last 7 calendar days are shown, newest first`() = statsTest {
         tracker.stats = EventStats(
             totalCount = 40, todayCount = 1,
             dailyCounts = listOf(
@@ -132,7 +147,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `the 7-day window uses the device time zone`() = runTest(main.dispatcher) {
+    fun `the 7-day window uses the device time zone`() = statsTest {
         zone = "Europe/Kyiv" // UTC+2 in March before DST
         clock.millis = millisOf(zone, 2026, 3, 15, 10)
         tracker.stats = EventStats(
@@ -150,7 +165,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `empty when loaded and there are no events`() = runTest(main.dispatcher) {
+    fun `empty when loaded and there are no events`() = statsTest {
         vm.onIntent(Intent.Visible)
         runCurrent()
 
@@ -159,7 +174,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `a failed refresh keeps the previous values and recovers`() = runTest(main.dispatcher) {
+    fun `a failed refresh keeps the previous values and recovers`() = statsTest {
         tracker.stats = EventStats(7, 7, listOf(day("15/03/2026", clock.millis, 7)))
         vm.onIntent(Intent.Visible)
         runCurrent()
@@ -175,7 +190,7 @@ class StatsViewModelTest {
     }
 
     @Test
-    fun `a failing first load leaves the screen out of the loading state`() = runTest(main.dispatcher) {
+    fun `a failing first load leaves the screen out of the loading state`() = statsTest {
         tracker.statsFailure = IllegalStateException("not initialised")
 
         vm.onIntent(Intent.Visible)
