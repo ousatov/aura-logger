@@ -16,3 +16,10 @@ tasks.withType<Test>().configureEach {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
+
+// kotlinx-coroutines-test APIs such as advanceUntilIdle are still marked experimental.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>()
+    .matching { it.name.contains("Test") }
+    .configureEach {
+        compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
+    }
