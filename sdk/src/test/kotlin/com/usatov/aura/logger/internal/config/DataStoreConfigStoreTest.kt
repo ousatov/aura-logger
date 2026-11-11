@@ -14,10 +14,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.params.ParameterizedTest
@@ -131,6 +133,39 @@ class DataStoreConfigStoreTest {
         store.write(config)
 
         assertEquals(config, store.read())
+    }
+
+    @Test
+    fun `config with any stored key missing is treated as missing`() = runBlocking {
+        val dataStore = newDataStore()
+        val store = DataStoreConfigStore(dataStore)
+        store.write(EventTrackerConfig(retentionDays = 3, maxEvents = 9))
+        val keys = dataStore.data.first().asMap().keys.toList()
+        assertTrue(keys.size >= 5, "expected every config field to be stored, got $keys")
+
+        for (key in keys) {
+            store.write(EventTrackerConfig(retentionDays = 3, maxEvents = 9))
+            dataStore.edit { it.remove(key) }
+            assertNull(store.read(), "read() must be null without ${key.name}")
+        }
+    }
+
+    @Test
+    fun `config with an invalid or unknown stored number is treated as missing`() = runBlocking {
+        val dataStore = newDataStore()
+        val store = DataStoreConfigStore(dataStore)
+        store.write(EventTrackerConfig())
+        @Suppress("UNCHECKED_CAST")
+        val intKeys = dataStore.data.first().asMap().filterValues { it is Int }.keys.map { it as Preferences.Key<Int> }
+        assertTrue(intKeys.isNotEmpty())
+
+        for (key in intKeys) {
+            for (bad in listOf(0, -1, Int.MIN_VALUE)) {
+                store.write(EventTrackerConfig())
+                dataStore.edit { it[key] = bad }
+                assertNull(store.read(), "read() must be null when ${key.name} = $bad")
+            }
+        }
     }
 
     companion object {
