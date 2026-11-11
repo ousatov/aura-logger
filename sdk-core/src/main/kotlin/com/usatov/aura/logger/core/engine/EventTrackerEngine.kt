@@ -5,7 +5,7 @@ import com.usatov.aura.logger.core.EventPage
 import com.usatov.aura.logger.core.EventStats
 import com.usatov.aura.logger.core.EventTracker
 import com.usatov.aura.logger.core.EventTrackerConfig
-import com.usatov.aura.logger.core.EventTrackerLimits
+import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.InternalAuraLoggerApi
 import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.TrackedEvent
@@ -25,8 +25,9 @@ import kotlin.time.Clock
  * per process and delegates to it from the public facade.
  *
  * Before [start], the engine accepts [track] calls into a bounded in-memory buffer of
- * [preInitBufferCapacity] events (oldest dropped with a warning on overflow); their ids and
- * timestamps are generated at call time with [idGenerator] and [initialClock].
+ * [AuraLoggerSettings.preInitBufferCapacity] events (oldest dropped with a warning on overflow);
+ * their ids and timestamps are generated at call time with [idGenerator] and [initialClock].
+ * Input validation uses the validation values of [settings].
  *
  * @param initialClock clock used for events tracked before [start].
  */
@@ -36,7 +37,7 @@ public class EventTrackerEngine(
     private val timeZoneProvider: TimeZoneProvider,
     private val logger: AuraLogger,
     private val initialClock: Clock = Clock.System,
-    private val preInitBufferCapacity: Int = EventTrackerLimits.PRE_INIT_BUFFER_CAPACITY,
+    private val settings: AuraLoggerSettings = AuraLoggerSettings(),
 ) : EventTracker {
 
     /** `true` after the first successful [start]. Thread-safe. */

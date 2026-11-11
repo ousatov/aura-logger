@@ -4,20 +4,19 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.usatov.aura.logger.core.AuraLoggerSettings
 import com.usatov.aura.logger.core.spi.CleanupScheduler
 
-/** Unique work names used by the SDK. */
-internal object CleanupWork {
-    /** Unique name of the periodic cleanup (24 h period, 1 h initial delay, existing work kept). */
-    const val PERIODIC_WORK_NAME: String = "aura_logger_periodic_cleanup"
-
-    /** Unique name of the one-time cleanup scheduled on config updates (pending work replaced). */
-    const val ONE_TIME_WORK_NAME: String = "aura_logger_one_time_cleanup"
-}
-
-/** [CleanupScheduler] backed by WorkManager unique work, both runs use [CleanupWorker]. */
+/**
+ * [CleanupScheduler] backed by WorkManager unique work; both runs use [CleanupWorker].
+ *
+ * Periodic: [AuraLoggerSettings.periodicCleanupWorkName], [AuraLoggerSettings.cleanupPeriodHours]
+ * period, [AuraLoggerSettings.cleanupInitialDelayHours] initial delay, existing work kept.
+ * One-time: [AuraLoggerSettings.oneTimeCleanupWorkName], pending work replaced.
+ */
 internal class WorkManagerCleanupScheduler(
     private val workManager: WorkManager,
+    private val settings: AuraLoggerSettings,
 ) : CleanupScheduler {
 
     override fun schedulePeriodic(): Unit = TODO("Not implemented yet")

@@ -34,14 +34,22 @@ public interface EventTracker {
     /**
      * Records an event.
      *
+     * Before initialisation, events are kept in memory (up to 500; when full, the oldest buffered
+     * event is dropped with a warning) and written on initialisation in call order.
+     *
      * The id and the timestamp are generated synchronously at call time, so the event keeps its
      * position even if it is written later. The write itself happens on the background queue;
      * this function never blocks and never throws. Concurrent and rapid calls (hundreds per
      * second) are all stored.
      *
-     * Invalid input does not throw: an event whose name or properties violate
-     * [EventTrackerLimits] is dropped and a warning is logged. If writing to the database fails,
-     * the event is lost and an error is logged.
+     * Invalid input does not throw: the event is dropped as a whole (nothing is truncated) and a
+     * warning is logged. An event is invalid if:
+     * - the name is blank or longer than 128 characters;
+     * - it has more than 50 properties;
+     * - a property key is blank or longer than 128 characters;
+     * - a property value is longer than 1024 characters (empty values are allowed).
+     *
+     * If writing to the database fails, the event is lost and an error is logged.
      *
      * Events that are still queued when the process dies are lost.
      *

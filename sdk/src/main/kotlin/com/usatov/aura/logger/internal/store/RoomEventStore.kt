@@ -46,15 +46,14 @@ internal class RoomEventStore private constructor() : EventStore {
     fun close(): Unit = TODO("Not implemented yet")
 
     companion object {
-        /** File name of the SDK database. */
-        const val DATABASE_NAME: String = "aura_logger_events.db"
-
         /**
          * Creates a store. Production code must use a single process-wide instance per database.
          *
-         * @param databaseName database file name, or `null` for an in-memory database (tests).
+         * @param databaseName database file name (production:
+         * [com.usatov.aura.logger.core.AuraLoggerSettings.databaseName]), or `null` for an
+         * in-memory database (tests).
          */
-        fun create(context: Context, databaseName: String? = DATABASE_NAME): RoomEventStore =
+        fun create(context: Context, databaseName: String?): RoomEventStore =
             TODO("Not implemented yet")
     }
 }

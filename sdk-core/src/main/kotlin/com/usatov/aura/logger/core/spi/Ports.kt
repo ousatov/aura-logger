@@ -17,7 +17,8 @@ public interface ConfigStore {
 @InternalAuraLoggerApi
 public interface CleanupScheduler {
     /**
-     * Schedules the unique periodic cleanup: every 24 hours, first run 1 hour after scheduling.
+     * Schedules the unique periodic cleanup with the period and initial delay of
+     * [com.usatov.aura.logger.core.AuraLoggerSettings] (24 hours / 1 hour by default).
      * If it is already scheduled, the existing schedule is kept unchanged.
      */
     public fun schedulePeriodic()
