@@ -25,19 +25,17 @@ package com.usatov.aura.logger.core
  * @property periodicCleanupWorkName unique name of the periodic cleanup work.
  * @property oneTimeCleanupWorkName unique name of the one-time cleanup work scheduled by
  * [EventTracker.updateConfig].
- * @property enforceLimitOnWrite `true`: the [EventTrackerConfig.maxEvents] limit is applied right
- * after every write on the background write queue (and by the cleanup); `false`: only by the
- * cleanup, so the number of events can exceed the limit until the next cleanup run.
+ * @property enforceLimitOnWrite `true` (default): the [EventTrackerConfig.maxEvents] limit is
+ * applied right after every write on the background write queue and by the cleanup; `false`: only
+ * by the cleanup, so the number of events can exceed the limit until the next cleanup run.
  * @property limitOverflowStrategy what happens to new events when the limit is reached and no
- * event can be deleted to make room. See [LimitOverflowStrategy].
+ * event can be deleted to make room; applies only when [enforceLimitOnWrite] is `true`. Default:
+ * [LimitOverflowStrategy.KEEP_NEW_EVENTS]. See [LimitOverflowStrategy].
  *
- * Why [enforceLimitOnWrite] and [limitOverflowStrategy] are settings: the assignment states that the
- * cleanup deletes events when their number exceeds the limit, requires rapid tracking "without data
- * loss" and forbids clearing events the user has never seen. These requirements conflict when the
- * limit is reached with unseen events only. The defaults keep every new event and apply the limit
- * immediately. If the client (the assignment owner) wants another trade-off, change the defaults
- * here; if SDK users should choose themselves, these settings can be moved to the public
- * [EventTrackerConfig].
+ * The limit behaviour stated in [EventTracker.track] and [EventTrackerConfig] describes the
+ * default values of [enforceLimitOnWrite] and [limitOverflowStrategy]. With
+ * [LimitOverflowStrategy.DROP_NEW_EVENTS], new events are dropped when only unseen events are left
+ * above the limit.
  */
 @InternalAuraLoggerApi
 public data class AuraLoggerSettings(

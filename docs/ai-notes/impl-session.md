@@ -87,6 +87,12 @@ assignment PDF, and later the review findings and GitHub issues. No SDK tests we
 - **Small slips:** the first engine draft defined a private `emitAll` that duplicated
   `kotlinx.coroutines.flow.emitAll`. The first look-up could not confirm `PreferenceDataStoreFactory`
   or the package of `@Index`; compiling against the pinned versions settled both.
+- **KDoc wording kept from the spec merge:** after the #5 fix I recorded that "a new event is never
+  rejected because of the limit" still held (old impl-notes #28), without checking the
+  `onLimit = false` path. There, the limit applied right after a write deletes the new event if at
+  least `maxEvents` stored events are newer (for example, buffered pre-init events). The review
+  caught it. The KDoc now states the exact guarantees, and the design-discussion paragraph in
+  `AuraLoggerSettings` was removed (§9); this was a KDoc edit explicitly authorised by the user.
 - **Wrong time estimate:** my first notes said the initial implementation took "about 1 hour". Git
   timestamps show about 15 minutes; the estimate was not checked when I wrote it.
 

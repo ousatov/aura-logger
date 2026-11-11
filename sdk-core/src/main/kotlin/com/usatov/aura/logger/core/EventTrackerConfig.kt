@@ -7,7 +7,9 @@ package com.usatov.aura.logger.core
  * the SDK initialisation). The [maxEvents] limit is applied by the cleanup and also right after
  * every write on the background write queue, so the number of stored events exceeds [maxEvents]
  * only while unseen events protected by [UnseenEventsProtection.onLimit] prevent deletion.
- * New events are never rejected because of the limit.
+ * With `onLimit` (the default), a newly tracked event is unseen and is never deleted by the limit.
+ * With `onLimit = false`, the newest [maxEvents] events are kept, so a new event is deleted right
+ * after it is written if at least [maxEvents] stored events are newer than it.
  *
  * Instances are immutable and safe to share between threads.
  *
