@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalResources
@@ -23,6 +24,7 @@ import com.usatov.aura.logger.demo.R
 import com.usatov.aura.logger.demo.actions.ActionsContract.Effect
 import com.usatov.aura.logger.demo.actions.ActionsContract.Intent
 import com.usatov.aura.logger.demo.core.ui.LocalSnackbarHostState
+import com.usatov.aura.logger.demo.core.ui.showLatest
 
 /**
  * Dashboard: "Track Event", "Track 100 Events", "Track with Properties" and "Clear All Events"
@@ -36,7 +38,7 @@ fun ActionsSection(modifier: Modifier = Modifier) {
     val resources = LocalResources.current
 
     LaunchedEffect(viewModel, snackbarHostState) {
-        viewModel.effects.collect { effect ->
+        viewModel.effects.collectLatest { effect ->
             val message = when (effect) {
                 is Effect.Tracked -> resources.getQuantityString(
                     R.plurals.actions_tracked,
@@ -58,8 +60,7 @@ fun ActionsSection(modifier: Modifier = Modifier) {
                 }
                 Effect.ClearFailed -> resources.getString(R.string.actions_clear_failed)
             }
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message)
+            snackbarHostState.showLatest(message)
         }
     }
 
