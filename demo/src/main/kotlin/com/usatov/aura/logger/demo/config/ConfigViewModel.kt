@@ -87,7 +87,6 @@ class ConfigViewModel @Inject constructor(
             is Intent.TrackNavigationChanged -> setState { copy(trackNavigation = intent.enabled) }
             is Intent.ClearDeletesUnseenChanged -> setState { copy(clearDeletesUnseen = intent.enabled) }
             Intent.ScreenHidden -> persistSwitches()
-
         }
     }
 
@@ -99,6 +98,14 @@ class ConfigViewModel @Inject constructor(
         setState { copy(isSaving = true) }
         val previous = snapshot.savedConfig
         viewModelScope.launch {
+            // Same lock as persistSwitches(): a switch save must not build on a stale savedConfig
+            // and overwrite values saved here.
+            saveMutex.withLock { saveLocked(previous, retention, maxEvents) }
+        }
+    }
+
+    private suspend fun saveLocked(previous: EventTrackerConfig?, retention: Int, maxEvents: Int) {
+        run {
             val config = EventTrackerConfig(
                 retentionDays = retention,
                 maxEvents = maxEvents,
