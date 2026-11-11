@@ -203,6 +203,43 @@ class EngineFailureTest {
     }
 
     @Nested
+    inner class BrokenInput {
+        @Test
+        fun `markSeen with a collection that fails to iterate does not throw`() = runTest {
+            val h = started()
+            val broken = object : AbstractCollection<String>() {
+                override val size: Int = 1
+                override fun iterator(): Iterator<String> = throw ConcurrentModificationException("mutated")
+            }
+
+            assertDoesNotThrow { h.engine.markSeen(broken) }
+            assertTrue(h.logger.errors.isNotEmpty())
+        }
+
+        @Test
+        fun `a cancellation thrown by a port while the queue is active fails only that call`() = runTest {
+            val h = EngineHarness(this)
+            val store = object : ConfigStore by h.configStore {
+                var fail = false
+                override suspend fun write(config: EventTrackerConfig) {
+                    if (fail) throw kotlinx.coroutines.CancellationException("port timeout")
+                    h.configStore.write(config)
+                }
+            }
+            h.engine.start(
+                EngineDependencies(EventTrackerConfig(), h.store, store, h.scheduler, h.clock, backgroundScope, StandardTestDispatcher(testScheduler)),
+            )
+            runCurrent()
+            store.fail = true
+
+            assertThrows<IllegalStateException> { h.engine.updateConfig(EventTrackerConfig(maxEvents = 3)) }
+            h.engine.track("still_works")
+            runCurrent()
+            assertEquals(1, h.store.all.size)
+        }
+    }
+
+    @Nested
     inner class StoppedQueue {
         private fun TestScope.startWithQueueScope(h: EngineHarness, store: EventStore = h.store): CoroutineScope {
             val queueScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
@@ -257,6 +294,91 @@ class EngineFailureTest {
             runCurrent()
 
             assertTrue(delegate.all.isEmpty())
+            assertTrue(h.logger.errors.isNotEmpty())
+        }
+
+        @Test
+        fun `a write call running when the queue stops fails with IllegalStateException`() = runTest {
+            val gate = CompletableDeferred<Unit>()
+            val delegate = FakeEventStore()
+            val store = object : EventStore by delegate {
+                override suspend fun deleteAll(keepUnseen: Boolean): Int {
+                    gate.await()
+                    return delegate.deleteAll(keepUnseen)
+                }
+            }
+            val h = EngineHarness(this)
+            val queueScope = startWithQueueScope(h, store)
+            val clear = backgroundScope.async { runCatching { h.engine.clearAll() } }
+            runCurrent()
+
+            queueScope.cancel()
+            runCurrent()
+
+            assertTrue(clear.await().exceptionOrNull() is IllegalStateException)
+        }
+
+        @Test
+        fun `a fire-and-forget write running when the queue stops is logged`() = runTest {
+            val gate = CompletableDeferred<Unit>()
+            val delegate = FakeEventStore()
+            val store = object : EventStore by delegate {
+                override suspend fun markSeen(ids: Collection<String>) {
+                    gate.await()
+                }
+            }
+            val h = EngineHarness(this)
+            val queueScope = startWithQueueScope(h, store)
+            h.engine.markSeen(listOf("id-1"))
+            runCurrent()
+
+            queueScope.cancel()
+            runCurrent()
+
+            assertTrue(h.logger.errors.isNotEmpty())
+        }
+
+        @Test
+        fun `a write queued behind a blocked insert is abandoned with an error when the queue stops`() = runTest {
+            val gate = CompletableDeferred<Unit>()
+            val delegate = FakeEventStore()
+            val store = object : EventStore by delegate {
+                override suspend fun insert(events: List<NewEventRecord>) {
+                    gate.await()
+                    delegate.insert(events)
+                }
+            }
+            val h = EngineHarness(this)
+            val queueScope = startWithQueueScope(h, store)
+            h.engine.track("blocked")
+            h.engine.markSeen(listOf("id-1")) // queued behind the insert before the queue runs
+            runCurrent()
+
+            queueScope.cancel()
+            runCurrent()
+
+            assertTrue(h.logger.errors.size >= 2)
+        }
+
+        @Test
+        fun `a cancellation thrown by insert while the queue is active loses only that batch`() = runTest {
+            val delegate = FakeEventStore()
+            val failOnce = java.util.concurrent.atomic.AtomicBoolean(true)
+            val store = object : EventStore by delegate {
+                override suspend fun insert(events: List<NewEventRecord>) {
+                    if (failOnce.getAndSet(false)) throw kotlinx.coroutines.CancellationException("driver timeout")
+                    delegate.insert(events)
+                }
+            }
+            val h = EngineHarness(this)
+            startWithQueueScope(h, store)
+
+            h.engine.track("lost")
+            runCurrent()
+            h.engine.track("kept")
+            runCurrent()
+
+            assertEquals(listOf("kept"), delegate.all.map { it.name })
             assertTrue(h.logger.errors.isNotEmpty())
         }
 
