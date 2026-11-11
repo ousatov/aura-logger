@@ -9,7 +9,7 @@ import com.usatov.aura.logger.core.PropertiesCodec
 import com.usatov.aura.logger.core.TrackedEvent
 import androidx.paging.PagingDataEvent
 import androidx.paging.PagingDataPresenter
-import com.usatov.aura.logger.demo.events.EventsContract.EventItem
+import com.usatov.aura.logger.demo.events.EventsContract.EventListItem
 import com.usatov.aura.logger.demo.events.EventsContract.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.ZoneOffset
+import kotlin.time.Clock
 
 class EventsViewModelTest {
 
@@ -46,11 +47,11 @@ class EventsViewModelTest {
 
     @Test
     fun `markSeen alone does not reload the list from the start`() = runTest(dispatcher) {
-        val viewModel = EventsViewModel(tracker, formatter)
+        val viewModel = EventsViewModel(tracker, formatter, Clock.System) { ZoneOffset.UTC }
         val presenter = present(viewModel)
         advanceUntilIdle()
         assertEquals(1, tracker.firstPageLoads)
-        assertEquals(listOf("id_2", "id_1", "id_0"), presenter.snapshot().items.map { it.id })
+        assertEquals(listOf("id_2", "id_1", "id_0"), presenter.snapshot().items.eventIds())
 
         viewModel.onIntent(Intent.ItemsShown(listOf("id_0", "id_1")))
         advanceUntilIdle()
@@ -63,29 +64,32 @@ class EventsViewModelTest {
 
     @Test
     fun `tracked and deleted events reload the list`() = runTest(dispatcher) {
-        val viewModel = EventsViewModel(tracker, formatter)
+        val viewModel = EventsViewModel(tracker, formatter, Clock.System) { ZoneOffset.UTC }
         val presenter = present(viewModel)
         advanceUntilIdle()
 
         tracker.track("new_event")
         advanceUntilIdle()
         assertEquals(2, tracker.firstPageLoads)
-        assertEquals("id_3", presenter.snapshot().items.first().id)
+        assertEquals("id_3", presenter.snapshot().items.eventIds().first())
 
         tracker.clearAll()
         advanceUntilIdle()
         assertEquals(3, tracker.firstPageLoads)
-        assertEquals(emptyList<EventItem>(), presenter.snapshot().items)
+        assertEquals(emptyList<String>(), presenter.snapshot().items.eventIds())
     }
 
     /** Presents [EventsViewModel.events] like the UI does, so that pages are actually loaded. */
-    private fun TestScope.present(viewModel: EventsViewModel): PagingDataPresenter<EventItem> {
-        val presenter = object : PagingDataPresenter<EventItem>(mainContext = dispatcher) {
-            override suspend fun presentPagingDataEvent(event: PagingDataEvent<EventItem>) = Unit
+    private fun TestScope.present(viewModel: EventsViewModel): PagingDataPresenter<EventListItem> {
+        val presenter = object : PagingDataPresenter<EventListItem>(mainContext = dispatcher) {
+            override suspend fun presentPagingDataEvent(event: PagingDataEvent<EventListItem>) = Unit
         }
         backgroundScope.launch { viewModel.events.collectLatest(presenter::collectFrom) }
         return presenter
     }
+
+    /** Ids of the event rows, without day headers. */
+    private fun List<EventListItem?>.eventIds(): List<String> = filterIsInstance<EventListItem.Event>().map { it.item.id }
 
     private class FakeEventTracker : EventTracker {
         private val events = mutableListOf<TrackedEvent>()
