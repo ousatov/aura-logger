@@ -34,12 +34,14 @@ class EventsViewModelTest {
 
     @Test
     fun `pages are requested with the contract page size`() = runTest(main.dispatcher) {
-        tracker.events = (100 downTo 1).map { event("e$it", it * 1000L) }
+        tracker.events = (300 downTo 1).map { event("e$it", it * 1000L) }
 
-        vm.events.asSnapshot()
+        val items = vm.events.asSnapshot { appendScrollWhile { true } }
 
-        assertTrue(tracker.pageRequests.isNotEmpty())
-        assertTrue(tracker.pageRequests.drop(1).all { it.second == EventsContract.PAGE_SIZE })
+        assertEquals(300, items.size)
+        val appends = tracker.pageRequests.drop(1)
+        assertTrue(appends.isNotEmpty(), "expected append loads after the initial load")
+        assertTrue(appends.all { it.second == EventsContract.PAGE_SIZE }, "append sizes: ${appends.map { it.second }}")
     }
 
     @Test

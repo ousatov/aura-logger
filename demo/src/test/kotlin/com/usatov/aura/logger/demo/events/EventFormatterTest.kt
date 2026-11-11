@@ -44,6 +44,7 @@ class EventFormatterTest {
 
     @Test
     fun `single and empty-value properties`() {
+        assertEquals("k: v", formatter.format(event("a", 0, properties = mapOf("k" to "v"))).properties)
         assertEquals("k: ", formatter.format(event("a", 0, properties = mapOf("k" to ""))).properties)
     }
 
