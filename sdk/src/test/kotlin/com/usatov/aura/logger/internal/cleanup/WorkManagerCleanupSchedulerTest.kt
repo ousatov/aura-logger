@@ -15,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
@@ -72,15 +73,33 @@ class WorkManagerCleanupSchedulerTest {
 
     @Test
     fun repeatedOneTimeSchedulingReplacesThePendingWork() {
+        // Workers must not finish inside scheduleOneTime(), otherwise there is nothing to replace:
+        // the worker executor queues the work without running it, so the first request stays RUNNING.
+        val neverRuns = Executor { }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        WorkManagerTestInitHelper.initializeTestWorkManager(
+            context,
+            Configuration.Builder()
+                .setExecutor(neverRuns)
+                .setTaskExecutor(SynchronousExecutor())
+                .build(),
+        )
+        workManager = WorkManager.getInstance(context)
         val scheduler = WorkManagerCleanupScheduler(workManager, settings)
+
         scheduler.scheduleOneTime()
-        val firstId = infos(settings.oneTimeCleanupWorkName).first().id
+        val first = active(settings.oneTimeCleanupWorkName).single()
 
         scheduler.scheduleOneTime()
 
         val pending = active(settings.oneTimeCleanupWorkName)
-        assertTrue(pending.size <= 1)
-        pending.forEach { assertNotEquals(firstId, it.id) }
+        assertEquals(1, pending.size)
+        assertNotEquals(first.id, pending.single().id)
+        // KEEP would keep the first id and APPEND_OR_REPLACE would leave two unfinished works, so the
+        // assertions above fail for both. The replaced work is cancelled; WorkManager 2.12 also
+        // removes its record, so it is either CANCELLED or gone.
+        val replaced = workManager.getWorkInfoById(first.id).get()
+        assertTrue(replaced == null || replaced.state == WorkInfo.State.CANCELLED)
     }
 
     @Test
