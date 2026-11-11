@@ -1,6 +1,9 @@
 package com.usatov.aura.logger.demo.debug
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Clock
@@ -19,15 +22,20 @@ class TimeShiftClock @Inject constructor() : Clock {
 
     internal var systemClock: Clock = Clock.System
 
+    private val mutableOffset = MutableStateFlow(Duration.ZERO)
+
     /** Current offset from the system time; can be negative. Zero initially. */
-    val offset: StateFlow<Duration>
-        get() = TODO("D6")
+    val offset: StateFlow<Duration> = mutableOffset.asStateFlow()
 
     /** Adds [delta] (may be negative) to [offset]. */
-    fun shiftBy(delta: Duration): Unit = TODO("D6")
+    fun shiftBy(delta: Duration) {
+        mutableOffset.update { it + delta }
+    }
 
     /** Sets [offset] back to zero. */
-    fun reset(): Unit = TODO("D6")
+    fun reset() {
+        mutableOffset.value = Duration.ZERO
+    }
 
-    override fun now(): Instant = TODO("D6")
+    override fun now(): Instant = systemClock.now() + mutableOffset.value
 }

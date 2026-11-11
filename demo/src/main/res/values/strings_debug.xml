@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="debug_title">Debug: time shift</string>
+    <string name="debug_shifted_time">Shifted time: %1$s</string>
+    <string name="debug_offset">Offset: %1$s</string>
+    <string name="debug_reset">Reset</string>
+    <string name="debug_note">Statistics, \"today\" and retention follow the shifted time.</string>
+</resources>
